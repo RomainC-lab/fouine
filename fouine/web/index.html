@@ -27,6 +27,8 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-alerte" viewBox="0 0 24 24"><path d="M12 4l9 15.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
   <symbol id="i-sortir" viewBox="0 0 24 24"><path d="M13.5 5H19v5.5M19 5l-8 8"/><path d="M17 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V9a1.5 1.5 0 0 1 1.5-1.5H11"/></symbol>
+  <symbol id="i-page" viewBox="0 0 24 24"><path d="M6.5 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M13.5 3.5v4h4M8.5 12.5h7M8.5 16h5"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l4.8-4.6 3.4 3.2 2.6-2.4L20 17.5"/></symbol>
   <symbol id="i-retour" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 5v4.2h4.2"/></symbol>
 </svg>
 
@@ -98,7 +100,7 @@
     <div id="zone-recherche">
       <div class="amorce">
         <h2>Que cherchez-vous&nbsp;?</h2>
-        <p>Décrivez ce que contient le fichier, avec vos mots.</p>
+        <p id="amorce-suite">Décrivez ce que contient le fichier, avec vos mots.</p>
       </div>
       <form id="form-recherche" class="recherche">
         <svg class="guetteur" viewBox="0 0 120 74" aria-hidden="true" focusable="false">
@@ -123,7 +125,10 @@
       </form>
       <p id="etat-index" class="discret"></p>
     </div>
-    <div id="resultats" aria-live="polite"></div>
+    <div id="resultats" aria-live="polite">
+      <div id="bloc-documents"></div>
+      <div id="bloc-images"></div>
+    </div>
   </section>
 
   <section id="regler" hidden>
@@ -146,7 +151,7 @@
           <div class="champ">
             <label for="extensions">Types de fichiers lus</label>
             <input id="extensions" type="text" spellcheck="false">
-            <p class="aide">Séparés par des espaces. Tout autre type (photos, vidéos, musique, archives, programmes…) n'est jamais ouvert.</p>
+            <p class="aide">Séparés par des espaces. Tout autre type (vidéos, musique, archives, programmes…) n'est jamais ouvert. Les images se règlent plus bas.</p>
           </div>
           <div class="champ court">
             <label for="taille">Taille maximale d'un fichier, en Mo</label>
@@ -160,6 +165,24 @@
           <div class="champ case">
             <input id="caches" type="checkbox">
             <label for="caches">Lire aussi les fichiers et dossiers cachés</label>
+          </div>
+          <div class="images-option">
+            <div class="champ case">
+              <input id="lire-images" type="checkbox" aria-describedby="aide-images">
+              <label for="lire-images">Lire aussi les images</label>
+            </div>
+            <p id="aide-images" class="aide">Photos, captures d'écran, documents photographiés : vous les retrouvez en décrivant ce qu'on y voit. C'est plus lent (quelques secondes par image, la première fois seulement) et Fouine télécharge une seule fois un second modèle (<span id="taille-modele-images">environ 315 Mo</span>). Si vous décochez la case, les images sortent de l'index à l'indexation suivante.</p>
+            <div id="reglages-images" class="deux-champs" hidden>
+              <div class="champ court">
+                <label for="image-cote">Plus petit côté accepté, en points</label>
+                <input id="image-cote" type="number" min="1" max="10000" step="1">
+                <p class="aide">En dessous : icônes et miniatures, laissées de côté.</p>
+              </div>
+              <div class="champ court">
+                <label for="image-taille">Taille maximale d'une image, en Mo</label>
+                <input id="image-taille" type="number" min="1" max="2000" step="1">
+              </div>
+            </div>
           </div>
           <details class="sensibles">
             <summary><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-cadenas"/></svg>Fichiers sensibles : jamais lus</summary>
@@ -178,7 +201,7 @@
         <span class="numero" aria-hidden="true">3</span>
         <div class="bloc">
           <h2><span class="invisible">Étape 3 : </span>Vérifier, puis indexer</h2>
-          <p class="discret">L'aperçu compte les fichiers sans les ouvrir. L'indexation les lit ; la première fois elle peut être longue, les suivantes ne relisent que ce qui a changé.</p>
+          <p class="discret">L'aperçu compte les fichiers sans lire leur contenu (pour une image, il regarde seulement sa taille en points). L'indexation les lit ; la première fois elle peut être longue, les suivantes ne relisent que ce qui a changé.</p>
           <p class="actions">
             <button type="button" id="voir-apercu"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-oeil"/></svg>Voir ce qui serait lu</button>
             <button type="button" id="indexer" class="principal"><svg class="ico plein" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-lancer"/></svg>Indexer maintenant</button>

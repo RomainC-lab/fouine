@@ -21,11 +21,22 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs
 
 from . import __version__, filtres, reglages as mod_reglages
 from .embedding import TAILLE_MODELE
+from .images import TAILLE_MODELE_IMAGES
 
-DOSSIER_WEB = Path(__file__).parent / "web"
+
+def _dossier_web() -> Path:
+    """Les fichiers de l'interface ; dans le programme Windows tout fait, ils sont embarqués."""
+    embarque = getattr(sys, "_MEIPASS", None)
+    if embarque and (Path(embarque) / "fouine" / "web").is_dir():
+        return Path(embarque) / "fouine" / "web"
+    return Path(__file__).parent / "web"
+
+
+DOSSIER_WEB = _dossier_web()
 _STATIQUES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -34,7 +45,7 @@ _STATIQUES = {
 _CORPS_MAX = 1024 * 1024
 _SECURITE = (
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
-    "img-src 'self' data:; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+    "img-src 'self' data: blob:; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
 )
 # Types de fichiers qu'on n'ouvre jamais d'un clic : ce sont des programmes.
 _PROGRAMMES = {
@@ -77,7 +88,8 @@ class Application:
         self._verrou = threading.Lock()
         self._arret = threading.Event()
         self._fil: threading.Thread | None = None
-        self.tache = {"en_cours": False, "etape": "", "fait": 0, "total": 0, "fichier": "", "bilan": None, "erreur": None}
+        self.tache = {"en_cours": False, "etape": "", "fait": 0, "total": 0, "fichier": "", "reste_s": None, "bilan": None,
+                      "erreur": None}
 
     # -- réglages
 
@@ -93,6 +105,7 @@ class Application:
             "index": self.index.statistiques(),
             "tache": dict(self.tache),
             "taille_modele": TAILLE_MODELE,
+            "taille_modele_images": TAILLE_MODELE_IMAGES,
         }
 
     def enregistrer(self, corps: dict) -> dict:
@@ -102,8 +115,12 @@ class Application:
         if not isinstance(recu, dict):
             raise Refus(400, "Réglages manquants.")
         if recu.get("defaut") is True:
+            # Les filtres reviennent à l'origine ; les dossiers choisis et le choix de lire
+            # ou non les images sont gardés.
+            actuels = self.reglages()
             nouveaux = mod_reglages.reglages_par_defaut()
-            nouveaux["dossiers"] = self.reglages()["dossiers"]
+            nouveaux["dossiers"] = actuels["dossiers"]
+            nouveaux["lire_images"] = actuels["lire_images"]
         else:
             # L'interface ne modifie pas la liste des fichiers sensibles : elle reste
             # celle du fichier de réglages.
@@ -144,7 +161,14 @@ class Application:
     # -- aperçu, indexation
 
     def apercu(self, _=None) -> dict:
-        return filtres.apercu(self.reglages())
+        dimensions, deja_lu = self.index.memoire()
+        apercu = filtres.apercu(self.reglages(), dimensions_connues=dimensions, deja_lu=deja_lu, dossier_fouine=self.dossier
+        )
+        # Durée annoncée seulement si la vitesse a déjà été mesurée sur ce PC.
+        vitesse = self.index.statistiques()["secondes_par_image"]
+        a_lire = apercu["acceptes"]["images_a_lire"]
+        apercu["duree_images_s"] = round(vitesse * a_lire) if vitesse is not None and a_lire else None
+        return apercu
 
     def indexer(self, _=None) -> dict:
         with self._verrou:
@@ -154,7 +178,9 @@ class Application:
             if not reglages["dossiers"]:
                 raise Refus(400, "Choisissez d'abord au moins un dossier.")
             self._arret.clear()
-            self.tache.update(en_cours=True, etape="parcours", fait=0, total=0, fichier="", bilan=None, erreur=None)
+            self.tache.update(
+                en_cours=True, etape="parcours", fait=0, total=0, fichier="", reste_s=None, bilan=None, erreur=None
+            )
             self._fil = threading.Thread(target=self._travail, args=(reglages,), daemon=True)
             self._fil.start()
         return {"tache": dict(self.tache)}
@@ -171,7 +197,7 @@ class Application:
         except Exception as erreur:  # montré dans l'interface plutôt que perdu dans la console
             self.tache.update(erreur=f"{type(erreur).__name__} : {erreur}")
         finally:
-            self.tache.update(en_cours=False, etape="", fichier="")
+            self.tache.update(en_cours=False, etape="", fichier="", reste_s=None)
             self.index.fermer()
 
     def arreter(self, _=None) -> dict:
@@ -189,6 +215,22 @@ class Application:
         if not isinstance(question, str):
             raise Refus(400, "Question manquante.")
         return {"resultats": self.index.rechercher(question)}
+
+    def recherche_images(self, corps: dict) -> dict:
+        """À part de la recherche de documents : le second modèle met plus de temps à répondre."""
+        question = corps.get("question")
+        if not isinstance(question, str):
+            raise Refus(400, "Question manquante.")
+        return {"images": self.index.rechercher_images(question)}
+
+    def vignette(self, identifiant: str) -> bytes:
+        """La petite copie d'une image de l'index, et de rien d'autre."""
+        if not identifiant.isascii() or not identifiant.isdigit() or len(identifiant) > 12:
+            raise Refus(400, "Demande incomprise.")
+        contenu = self.index.vignette(int(identifiant))
+        if contenu is None:
+            raise Refus(404, "Cette image n'est pas dans l'index.")
+        return contenu
 
     def illisibles(self, _=None) -> dict:
         return {"illisibles": self.index.illisibles()}
@@ -218,6 +260,7 @@ class Application:
         "indexer": indexer,
         "arreter": arreter,
         "recherche": recherche,
+        "recherche_images": recherche_images,
         "illisibles": illisibles,
         "ouvrir": ouvrir,
     }
@@ -282,6 +325,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             if chemin == "/api/etat":
                 self._controler(api=True)
                 return self._json(200, self.server.application.etat())
+            if chemin == "/api/vignette":
+                self._controler(api=True)
+                demande = parse_qs(self.path.partition("?")[2]).get("id", [""])
+                return self._repondre(200, self.server.application.vignette(demande[0]), "image/jpeg")
             self._controler(api=False)
             if chemin not in _STATIQUES:
                 raise Refus(404, "Page introuvable.")
@@ -289,6 +336,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
             self._repondre(200, (DOSSIER_WEB / nom).read_bytes(), type_contenu)
         except Refus as refus:
             self._refuser(refus)
+        except Exception as erreur:
+            self._refuser(Refus(500, f"Erreur inattendue ({type(erreur).__name__})."))
 
     do_HEAD = do_GET
 

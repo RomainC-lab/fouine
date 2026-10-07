@@ -44,8 +44,9 @@ DOSSIERS_TECHNIQUES = [
     ".vscode",
 ]
 
-# Seuls ces types de fichiers sont lus. Tout le reste (images, vidéos,
-# musique, archives, programmes…) est écarté sans être ouvert.
+# Seuls ces types de documents sont lus. Tout le reste (vidéos, musique,
+# archives, programmes…) est écarté sans être ouvert. Les images ont leur
+# propre liste, plus bas.
 EXTENSIONS = [
     ".txt",
     ".md",
@@ -134,6 +135,12 @@ CHEMINS_SENSIBLES = [
 
 TAILLE_MAX_MO = 20
 
+# Images, lues seulement si l'option « Lire aussi les images » est cochée :
+# les types que Pillow ouvre sans greffon.
+EXTENSIONS_IMAGES = [".jpg", ".jpeg", ".jfif", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"]
+IMAGE_COTE_MIN_PX = 64  # en dessous : icônes, miniatures, puces de pages web
+IMAGE_TAILLE_MAX_MO = 40
+
 
 def dossier_donnees() -> Path:
     """Dossier où Fouine range son index, ses réglages et le modèle."""
@@ -179,6 +186,9 @@ def reglages_par_defaut() -> dict:
         "inclure_caches": False,
         "extensions": list(EXTENSIONS),
         "taille_max_mo": TAILLE_MAX_MO,
+        "lire_images": False,
+        "image_cote_min_px": IMAGE_COTE_MIN_PX,
+        "image_taille_max_mo": IMAGE_TAILLE_MAX_MO,
         "motifs_sensibles": list(MOTIFS_SENSIBLES),
         "chemins_sensibles": list(CHEMINS_SENSIBLES),
     }
@@ -216,11 +226,18 @@ def nettoyer(brut) -> dict:
         if len(ext) > 1 and "/" not in ext and "\\" not in ext and ext not in extensions:
             extensions.append(ext)
     propre["extensions"] = extensions
-    taille = brut.get("taille_max_mo", defaut["taille_max_mo"])
-    if isinstance(taille, bool) or not isinstance(taille, (int, float)) or not (0 < taille <= 2000):
-        taille = defaut["taille_max_mo"]
-    propre["taille_max_mo"] = taille
+    propre["taille_max_mo"] = _nombre(brut, "taille_max_mo", defaut, 2000)
+    propre["lire_images"] = brut.get("lire_images") is True
+    propre["image_cote_min_px"] = int(_nombre(brut, "image_cote_min_px", defaut, 10000))
+    propre["image_taille_max_mo"] = _nombre(brut, "image_taille_max_mo", defaut, 2000)
     return propre
+
+
+def _nombre(brut: dict, cle: str, defaut: dict, maximum: float):
+    valeur = brut.get(cle, defaut[cle])
+    if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not (0 < valeur <= maximum):
+        return defaut[cle]
+    return valeur
 
 
 def charger(dossier: Path | None = None) -> dict:

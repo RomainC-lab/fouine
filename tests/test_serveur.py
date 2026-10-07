@@ -11,7 +11,7 @@ from pathlib import Path
 from fouine import reglages as mod_reglages
 from fouine.index import Index
 from fouine.serveur import DOSSIER_WEB, Application, Serveur
-from tests.outils import FauxEmbedding, ecrire, reglages_pour
+from tests.outils import FauxEmbedding, FauxEmbeddingImages, ecrire, reglages_pour
 
 
 class Base(unittest.TestCase):
@@ -26,7 +26,7 @@ class Base(unittest.TestCase):
         ecrire(self.docs / ".env", "CLE=tressecret")
         ecrire(base / "dehors.txt", "fichier hors des dossiers choisis")
         self.dehors = base / "dehors.txt"
-        self.index = Index(self.donnees, FauxEmbedding())
+        self.index = Index(self.donnees, FauxEmbedding(), FauxEmbeddingImages())
         self.ouvertures = []
         self.application = Application(self.index, self.donnees, ouvrir=lambda c, q: self.ouvertures.append((c, q)))
         self.serveur = Serveur(self.application)
@@ -122,7 +122,10 @@ class TestSecurite(Base):
         self.assertEqual(reponse.status, 403)
 
     def test_jeton_obligatoire_pour_toute_action(self):
-        actions = ["enregistrer", "dossiers", "apercu", "indexer", "arreter", "recherche", "illisibles", "ouvrir"]
+        actions = [
+            "enregistrer", "dossiers", "apercu", "indexer", "arreter", "recherche", "recherche_images", "illisibles",
+            "ouvrir",
+        ]
         self.assertEqual(sorted(actions), sorted(Application.ACTIONS))
         for action in actions:
             for jeton in (False, "faux", self.serveur.jeton[:-1]):

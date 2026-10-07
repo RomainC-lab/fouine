@@ -1,5 +1,6 @@
 """L'index : un fichier SQLite qui garde, pour chaque fichier lu, ses morceaux de texte
-et leurs vecteurs. Sert à indexer (sans relire ce qui n'a pas changé) et à chercher.
+et leurs vecteurs ; pour chaque image, son vecteur. Sert à indexer (sans relire ce qui
+n'a pas changé) et à chercher.
 """
 
 from __future__ import annotations
@@ -7,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import statistics
 import threading
 import time
 from datetime import datetime
@@ -14,10 +16,15 @@ from pathlib import Path
 
 import numpy as np
 
+from . import images as mod_images
 from .extraction import Illisible, decouper, extraire
 from .filtres import _est_dans, parcourir, racines_utiles
 
 NOM_BASE = "index.sqlite"
+DOSSIER_VIGNETTES = "vignettes"
+# Les scores des images sont serrés (une image sans rapport fait déjà 0,55 à 0,60) :
+# pas de seuil, on montre les plus proches.
+IMAGES_MONTREES = 12
 _K_FUSION = 60  # constante habituelle du mélange par rangs (« reciprocal rank fusion »)
 _CANDIDATS = 60
 # En dessous de cette ressemblance, un passage n'a pas de rapport avec la question.
@@ -47,21 +54,34 @@ CREATE TABLE IF NOT EXISTS morceaux (
     vecteur BLOB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS morceaux_par_fichier ON morceaux(fichier_id);
+CREATE TABLE IF NOT EXISTS images (
+    fichier_id INTEGER PRIMARY KEY REFERENCES fichiers(id) ON DELETE CASCADE,
+    largeur INTEGER NOT NULL,
+    hauteur INTEGER NOT NULL,
+    vecteur BLOB NOT NULL
+);
 """
 
 
 class Index:
-    def __init__(self, dossier: Path, embedding):
+    def __init__(self, dossier: Path, embedding, embedding_images=None):
         self.dossier = Path(dossier)
         self.dossier.mkdir(parents=True, exist_ok=True)
         self.base = self.dossier / NOM_BASE
+        self.vignettes = self.dossier / DOSSIER_VIGNETTES
         self.embedding = embedding
+        self.embedding_images = embedding_images  # None : les images ne sont pas lues
+        self._cache_images = None
         self._local = threading.local()
         self._version = 0
         self._cache = None  # (version, identifiants, matrice)
         self._verrou_cache = threading.Lock()
         cx = self._cx()
         cx.executescript(_SCHEMA)
+        # Index créé par une version d'avant les images : il est gardé tel quel, on ajoute
+        # seulement la colonne qui distingue un document d'une image.
+        if "genre" not in [ligne[1] for ligne in cx.execute("PRAGMA table_info(fichiers)")]:
+            cx.execute("ALTER TABLE fichiers ADD COLUMN genre TEXT NOT NULL DEFAULT 'texte'")
         self.mots = self._creer_recherche_par_mots(cx)
         self._verifier_modele(cx)
         cx.commit()
@@ -99,17 +119,60 @@ class Index:
         """Si le modèle a changé, les anciens vecteurs ne valent plus rien : on repart de zéro."""
         ligne = cx.execute("SELECT valeur FROM meta WHERE cle='modele'").fetchone()
         if ligne and ligne[0] != self.embedding.nom:
-            cx.execute("DELETE FROM fichiers")
+            cx.execute("DELETE FROM fichiers WHERE genre='texte'")
             cx.execute("DELETE FROM morceaux")
             if self.mots:
                 cx.execute("DELETE FROM mots")
         cx.execute("INSERT OR REPLACE INTO meta VALUES ('modele', ?)", (self.embedding.nom,))
+        if self.embedding_images is None:
+            return
+        ligne = cx.execute("SELECT valeur FROM meta WHERE cle='modele_images'").fetchone()
+        if ligne and ligne[0] != self.embedding_images.nom:
+            for (fichier_id,) in cx.execute("SELECT id FROM fichiers WHERE genre='image'").fetchall():
+                self._retirer(cx, fichier_id)
+            cx.execute("DELETE FROM meta WHERE cle='secondes_par_image'")
+        cx.execute("INSERT OR REPLACE INTO meta VALUES ('modele_images', ?)", (self.embedding_images.nom,))
 
     def _retirer(self, cx, fichier_id: int) -> None:
         if self.mots:
             cx.execute("DELETE FROM mots WHERE rowid IN (SELECT id FROM morceaux WHERE fichier_id=?)", (fichier_id,))
         cx.execute("DELETE FROM morceaux WHERE fichier_id=?", (fichier_id,))
+        cx.execute("DELETE FROM images WHERE fichier_id=?", (fichier_id,))
         cx.execute("DELETE FROM fichiers WHERE id=?", (fichier_id,))
+        try:
+            self._vignette(fichier_id).unlink()
+        except OSError:
+            pass
+
+    def _vignette(self, fichier_id: int) -> Path:
+        return self.vignettes / f"{int(fichier_id)}.jpg"
+
+    def memoire(self):
+        """Ce que l'index sait déjà, pour que le parcours des dossiers aille vite.
+
+        Rend deux fonctions : `dimensions(chemin, taille, modifie)` donne la taille en points
+        d'une image déjà lue et inchangée ; `deja_lu(element)` dit si un fichier est déjà
+        dans l'index, inchangé.
+        """
+        connus = {
+            chemin: (taille, modifie, largeur, hauteur)
+            for chemin, taille, modifie, largeur, hauteur in self._cx().execute(
+                "SELECT f.chemin, f.taille, f.modifie, i.largeur, i.hauteur "
+                "FROM fichiers f LEFT JOIN images i ON i.fichier_id = f.id"
+            )
+        }
+
+        def dimensions(chemin, taille, modifie):
+            connu = connus.get(chemin)
+            if connu and connu[0] == taille and connu[1] == modifie and connu[2]:
+                return connu[2], connu[3]
+            return None
+
+        def deja_lu(element):
+            connu = connus.get(element.chemin)
+            return bool(connu and connu[0] == element.taille and connu[1] == element.modifie)
+
+        return dimensions, deja_lu
 
     # ----------------------------------------------------------- indexation
 
@@ -122,7 +185,10 @@ class Index:
         arret = arret or (lambda: False)
         signaler = progression or (lambda **infos: None)
         cx = self._cx()
-        bilan = {"nouveaux": 0, "modifies": 0, "inchanges": 0, "retires": 0, "illisibles": 0, "arrete": False}
+        bilan = {
+            "nouveaux": 0, "modifies": 0, "inchanges": 0, "retires": 0, "illisibles": 0, "images": 0,
+            "arrete": False,
+        }
 
         signaler(etape="parcours", fait=0, total=0, fichier="")
         connus = {
@@ -131,8 +197,8 @@ class Index:
         }
         a_faire = []
         vus = set()
-        for element in parcourir(reglages, arret):
-            if element.raison is not None:
+        for element in parcourir(reglages, arret, self.memoire()[0], self.dossier):
+            if element.raison is not None or (element.image and self.embedding_images is None):
                 continue
             vus.add(element.chemin)
             connu = connus.get(element.chemin)
@@ -154,14 +220,27 @@ class Index:
         cx.commit()
         self._version += 1
 
+        # Les documents d'abord (rapides), les images ensuite (quelques secondes chacune).
+        a_faire.sort(key=lambda element: element.image)
         total = len(a_faire)
+        durees: list[float] = []  # secondes passées sur chaque image, pour estimer la suite
         for numero, element in enumerate(a_faire):
             if arret():
                 bilan["arrete"] = True
                 break
-            signaler(etape="lecture", fait=numero, total=total, fichier=element.chemin)
+            reste = None
+            if len(durees) >= 3:
+                reste = round(statistics.median(durees) * (total - numero))
+            if element.image and not self.embedding_images.pret():
+                signaler(etape="modele_images", fait=numero, total=total, fichier="", reste_s=None)
+                self.embedding_images.charger()
+            signaler(etape="lecture", fait=numero, total=total, fichier=element.chemin, reste_s=reste)
             deja = element.chemin in connus
-            if not self._indexer_fichier(cx, element, arret):
+            if element.image:
+                debut = time.monotonic()
+                self._indexer_image(cx, element)
+                durees.append(time.monotonic() - debut)
+            elif not self._indexer_fichier(cx, element, arret):
                 bilan["arrete"] = True
                 break
             erreur = cx.execute("SELECT erreur FROM fichiers WHERE chemin=?", (element.chemin,)).fetchone()
@@ -169,10 +248,58 @@ class Index:
                 bilan["illisibles"] += 1
             else:
                 bilan["modifies" if deja else "nouveaux"] += 1
+                bilan["images"] += element.image
+        if len(durees) >= 3:
+            # Vitesse mesurée sur ce PC : sert à annoncer une durée la prochaine fois.
+            cx.execute(
+                "INSERT OR REPLACE INTO meta VALUES ('secondes_par_image', ?)", (str(statistics.median(durees)),)
+            )
         cx.execute("INSERT OR REPLACE INTO meta VALUES ('derniere_indexation', ?)", (str(time.time()),))
         cx.commit()
-        signaler(etape="fini", fait=total, total=total, fichier="")
+        self._menage_vignettes(cx)
+        signaler(etape="fini", fait=total, total=total, fichier="", reste_s=None)
         return bilan
+
+    def _indexer_image(self, cx, element) -> None:
+        """Ouvre une image, calcule son vecteur, garde une vignette. Jamais d'erreur vers l'appelant."""
+        erreur = None
+        image = vecteur = None
+        origine = (0, 0)
+        try:
+            image, origine = mod_images.ouvrir(element.chemin)
+            vecteur = np.asarray(self.embedding_images.vecteur_image(image), dtype=np.float32)
+        except Illisible as probleme:
+            erreur = str(probleme)
+        except Exception:  # image que le modèle n'accepte pas : notée, et on continue
+            erreur = "Image que Fouine n'a pas su lire"
+        ancien = cx.execute("SELECT id FROM fichiers WHERE chemin=?", (element.chemin,)).fetchone()
+        if ancien:
+            self._retirer(cx, ancien[0])
+        fichier_id = cx.execute(
+            "INSERT INTO fichiers (chemin, taille, modifie, erreur, indexe_le, genre) VALUES (?, ?, ?, ?, ?, 'image')",
+            (element.chemin, element.taille, element.modifie, erreur, time.time()),
+        ).lastrowid
+        if erreur is None:
+            cx.execute(
+                "INSERT INTO images (fichier_id, largeur, hauteur, vecteur) VALUES (?, ?, ?, ?)",
+                (fichier_id, origine[0], origine[1], vecteur.tobytes()),
+            )
+            try:
+                mod_images.vignette(image, self._vignette(fichier_id))
+            except Exception:  # la vignette sera refaite à la demande
+                pass
+        cx.commit()
+        self._version += 1
+
+    def _menage_vignettes(self, cx) -> None:
+        """Supprime les vignettes d'images qui ne sont plus dans l'index."""
+        gardees = {f"{fichier_id}.jpg" for (fichier_id,) in cx.execute("SELECT fichier_id FROM images")}
+        try:
+            for entree in os.scandir(self.vignettes):
+                if entree.name not in gardees:
+                    os.unlink(entree.path)
+        except OSError:
+            pass
 
     def _indexer_fichier(self, cx, element, arret) -> bool:
         """Lit un fichier et l'enregistre. Rend False si on a demandé l'arrêt en cours de route."""
@@ -296,6 +423,77 @@ class Index:
                 break
         return list(meilleurs.values())
 
+    def _matrice_images(self):
+        with self._verrou_cache:
+            if self._cache_images and self._cache_images[0] == self._version:
+                return self._cache_images[1], self._cache_images[2]
+            version = self._version
+            lignes = self._cx().execute("SELECT fichier_id, vecteur FROM images ORDER BY fichier_id").fetchall()
+            identifiants = np.array([ligne[0] for ligne in lignes], dtype=np.int64)
+            dimension = self.embedding_images.dimension
+            matrice = np.frombuffer(b"".join(ligne[1] for ligne in lignes), dtype=np.float32)
+            matrice = matrice.reshape(len(lignes), dimension)
+            self._cache_images = (version, identifiants, matrice)
+            return identifiants, matrice
+
+    def rechercher_images(self, question: str, limite: int = IMAGES_MONTREES) -> list[dict]:
+        """Les images les plus proches de la question, de la plus proche à la moins proche.
+
+        Liste à part de celle des documents : les deux modèles ne notent pas pareil,
+        leurs scores ne se comparent pas.
+        """
+        question = " ".join(question.split())[:500]
+        if not question or self.embedding_images is None:
+            return []
+        identifiants, matrice = self._matrice_images()
+        if not len(identifiants):
+            return []
+        scores = matrice @ self.embedding_images.vecteur_question(question)
+        cx = self._cx()
+        resultats = []
+        for i in np.argsort(-scores)[:limite]:
+            ligne = cx.execute(
+                "SELECT f.chemin, f.modifie, f.taille, i.largeur, i.hauteur FROM fichiers f "
+                "JOIN images i ON i.fichier_id = f.id WHERE f.id=?",
+                (int(identifiants[i]),),
+            ).fetchone()
+            if not ligne:
+                continue
+            chemin, modifie, taille, largeur, hauteur = ligne
+            resultats.append({
+                "id": int(identifiants[i]),
+                "chemin": chemin,
+                "nom": os.path.basename(chemin),
+                "dossier": os.path.dirname(chemin),
+                "modifie": datetime.fromtimestamp(modifie / 1e9).strftime("%d/%m/%Y"),
+                "taille": taille,
+                "largeur": largeur,
+                "hauteur": hauteur,
+                "score": round(float(scores[i]), 3),
+            })
+        return resultats
+
+    def vignette(self, fichier_id) -> bytes | None:
+        """La vignette (JPEG) d'une image de l'index ; None pour tout autre fichier."""
+        if isinstance(fichier_id, bool) or not isinstance(fichier_id, int):
+            return None
+        ligne = self._cx().execute(
+            "SELECT f.chemin FROM fichiers f JOIN images i ON i.fichier_id = f.id WHERE f.id=?", (fichier_id,)
+        ).fetchone()
+        if not ligne:
+            return None
+        fichier = self._vignette(fichier_id)
+        try:
+            return fichier.read_bytes()
+        except OSError:
+            pass
+        try:  # vignette effacée entre-temps : refaite à partir de l'image
+            image, _ = mod_images.ouvrir(ligne[0])
+            mod_images.vignette(image, fichier)
+            return fichier.read_bytes()
+        except (Illisible, OSError):
+            return None
+
     # ---------------------------------------------------------------- infos
 
     def chemin(self, fichier_id) -> str | None:
@@ -311,9 +509,13 @@ class Index:
             "SELECT COUNT(*), COALESCE(SUM(erreur IS NOT NULL), 0) FROM fichiers"
         ).fetchone()
         morceaux = cx.execute("SELECT COUNT(*) FROM morceaux").fetchone()[0]
+        nombre_images = cx.execute("SELECT COUNT(*) FROM images").fetchone()[0]
+        vitesse = cx.execute("SELECT valeur FROM meta WHERE cle='secondes_par_image'").fetchone()
         derniere = cx.execute("SELECT valeur FROM meta WHERE cle='derniere_indexation'").fetchone()
         return {
-            "fichiers": fichiers - illisibles,
+            "fichiers": fichiers - illisibles,  # documents et images
+            "images": nombre_images,
+            "secondes_par_image": round(float(vitesse[0]), 2) if vitesse else None,
             "illisibles": illisibles,
             "morceaux": morceaux,
             "derniere_indexation": (

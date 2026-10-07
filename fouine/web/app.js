@@ -68,6 +68,8 @@ const FAMILLES = {
   xlsx: "tableur", xls: "tableur", ods: "tableur", csv: "tableur", tsv: "tableur",
   pptx: "diapo", ppt: "diapo", odp: "diapo",
   html: "web", htm: "web",
+  jpg: "image", jpeg: "image", jfif: "image", png: "image", webp: "image", bmp: "image", gif: "image",
+  tif: "image", tiff: "image",
 };
 function extension(nom) {
   const point = nom.lastIndexOf(".");
@@ -161,9 +163,17 @@ function titre(nom) {
   return el("h3", {}, nom.slice(0, -ext.length - 1), el("span", { classe: "ext" }, "." + ext));
 }
 
-function afficherResultats(question, resultats) {
-  const zone = $("resultats");
+// Deux blocs séparés, « Documents » puis « Images » : chacun a son modèle, et leurs notes
+// ne se comparent pas. Le bloc Images n'existe que si des images sont dans l'index.
+function afficherResultats(question, resultats, avecImages) {
+  const zone = $("bloc-documents");
   zone.replaceChildren();
+  if (avecImages) zone.append(el("h3", { classe: "titre-bloc" }, ico("page"), "Documents"));
+  if (!resultats.length && avecImages) {
+    zone.append(el("p", { classe: "discret aucun-document" },
+      "Aucun document ne correspond. Regardez les images ci-dessous, ou essayez d'autres mots."));
+    return;
+  }
   if (!resultats.length) {
     zone.append(
       el("div", { classe: "bredouille" },
@@ -194,21 +204,99 @@ function afficherResultats(question, resultats) {
   }
 }
 
-function afficherAttente() {
-  const fantome = () => el("div", { classe: "fantome", "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
-  $("resultats").replaceChildren(el("p", { classe: "attente" }, "Fouine cherche…"), fantome(), fantome(), fantome());
+// Les vignettes sont demandées avec le jeton, comme le reste, puis posées dans la page
+// depuis la mémoire du navigateur (adresse « blob: »). Elles sont libérées à chaque recherche.
+let vignettes = [];
+
+function oublierVignettes() {
+  for (const adresse of vignettes) URL.revokeObjectURL(adresse);
+  vignettes = [];
 }
+
+async function poserVignette(cadre, identifiant) {
+  try {
+    const reponse = await fetch("/api/vignette?id=" + identifiant, { headers: { "X-Fouine-Jeton": jeton } });
+    if (!reponse.ok) throw new Error("vignette refusée");
+    const adresse = URL.createObjectURL(await reponse.blob());
+    vignettes.push(adresse);
+    const dessin = el("img", { alt: "", loading: "lazy" });
+    dessin.addEventListener("load", () => cadre.classList.add("prete"));
+    dessin.src = adresse;
+    cadre.replaceChildren(dessin);
+  } catch (erreur) {
+    cadre.classList.add("sans-vignette");
+    cadre.replaceChildren(ico("image"));
+  }
+}
+
+function afficherImages(images) {
+  const zone = $("bloc-images");
+  zone.replaceChildren();
+  if (!images.length) return;
+  zone.append(
+    el("h3", { classe: "titre-bloc" }, ico("image"), "Images"),
+    el("p", { classe: "discret note-images" },
+      images.length > 1
+        ? "Les " + nombre(images.length) + " images les plus proches de votre recherche, la plus proche en premier. Les dernières peuvent n'avoir aucun rapport."
+        : "La seule image de l'index. Elle peut n'avoir aucun rapport avec votre recherche."));
+  const planche = el("ul", { classe: "planche" });
+  for (const image of images) {
+    const ouvrir = (quoi) => () => essayer(() => appeler("ouvrir", { id: image.id, quoi }));
+    const cadre = el("button", { type: "button", classe: "cadre", title: "Ouvrir " + image.nom,
+      "aria-label": "Ouvrir l'image " + image.nom, clic: ouvrir("fichier") });
+    poserVignette(cadre, image.id);
+    planche.append(
+      el("li", { classe: "vue" },
+        cadre,
+        el("div", { classe: "legende-vue" },
+          titre(image.nom),
+          el("p", { classe: "ou" }, ico("dossier"), el("span", { classe: "chemin" }, image.dossier)),
+          el("p", { classe: "date" }, "Modifiée le " + image.modifie),
+          el("p", { classe: "actions" },
+            el("button", { type: "button", classe: "petit", clic: ouvrir("fichier"), "aria-label": "Ouvrir le fichier " + image.nom },
+              ico("sortir"), "Ouvrir"),
+            el("button", { type: "button", classe: "petit", clic: ouvrir("dossier"), "aria-label": "Ouvrir le dossier de " + image.nom },
+              ico("dossier"), "Dossier")))));
+  }
+  zone.append(planche);
+}
+
+function afficherAttente(avecImages) {
+  const fantome = () => el("div", { classe: "fantome", "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
+  $("bloc-documents").replaceChildren(el("p", { classe: "attente" }, "Fouine cherche…"), fantome(), fantome(), fantome());
+  $("bloc-images").replaceChildren();
+  if (avecImages) $("bloc-images").append(el("p", { classe: "attente" }, "Fouine regarde aussi dans vos images…"));
+}
+
+let recherche = 0;
 
 async function chercher(evenement) {
   evenement.preventDefault();
   const question = $("question").value.trim();
   if (!question) return;
+  const numero = ++recherche; // une recherche plus récente remplace celle-ci
+  const avecImages = Boolean(dernierEtat && dernierEtat.index.images);
   $("form-recherche").classList.add("flaire");
-  afficherAttente();
+  oublierVignettes();
+  afficherAttente(avecImages);
+  // Les documents s'affichent dès qu'ils sont trouvés ; les images suivent (leur modèle est plus lent).
+  const images = avecImages ? essayer(() => appeler("recherche_images", { question })) : Promise.resolve(null);
   const reponse = await essayer(() => appeler("recherche", { question }));
+  if (numero !== recherche) return;
+  if (reponse) afficherResultats(question, reponse.resultats, avecImages);
+  else $("bloc-documents").replaceChildren();
+  const trouvees = await images;
+  if (numero !== recherche) return;
   $("form-recherche").classList.remove("flaire");
-  if (reponse) afficherResultats(question, reponse.resultats);
-  else $("resultats").replaceChildren();
+  if (trouvees) afficherImages(trouvees.images);
+  else $("bloc-images").replaceChildren();
+}
+
+function viderResultats() {
+  recherche += 1;
+  oublierVignettes();
+  $("bloc-documents").replaceChildren();
+  $("bloc-images").replaceChildren();
 }
 
 function afficherEtatIndex(etat) {
@@ -217,7 +305,7 @@ function afficherEtatIndex(etat) {
   $("accueil").hidden = !vide;
   $("zone-recherche").hidden = vide;
   if (vide) {
-    $("resultats").replaceChildren();
+    viderResultats();
     const lecture = etat.tache.en_cours;
     $("accueil-titre").textContent = lecture
       ? "Fouine lit vos fichiers pour la première fois."
@@ -229,7 +317,11 @@ function afficherEtatIndex(etat) {
     $("accueil-bouton").textContent = lecture ? "Voir la progression" : "Choisir mes dossiers";
     return;
   }
+  $("amorce-suite").textContent = index.images
+    ? "Décrivez ce que contient le fichier, ou ce qu'on voit sur l'image, avec vos mots."
+    : "Décrivez ce que contient le fichier, avec vos mots.";
   let texte = pluriel(index.fichiers, "fichier") + " dans l'index";
+  if (index.images) texte += " (dont " + pluriel(index.images, "image") + ")";
   if (index.derniere_indexation) texte += ", mis à jour le " + index.derniere_indexation;
   texte += etat.tache.en_cours ? ". Indexation en cours." : ".";
   $("etat-index").textContent = texte;
@@ -264,6 +356,11 @@ function afficherReglages(etat) {
   $("taille").value = reglages.taille_max_mo;
   $("exclus").value = reglages.dossiers_exclus.join("\n");
   $("caches").checked = reglages.inclure_caches;
+  $("lire-images").checked = reglages.lire_images;
+  $("reglages-images").hidden = !reglages.lire_images;
+  $("image-cote").value = reglages.image_cote_min_px;
+  $("image-taille").value = reglages.image_taille_max_mo;
+  $("taille-modele-images").textContent = etat.taille_modele_images;
   $("sensibles").replaceChildren(...reglages.motifs_sensibles.map((m) => el("span", {}, m)));
   $("fichier-reglages").textContent = etat.fichier_reglages;
   $("version").textContent = etat.version;
@@ -276,6 +373,9 @@ function lireFormulaire() {
     taille_max_mo: Number($("taille").value),
     dossiers_exclus: $("exclus").value.split("\n").map((l) => l.trim()).filter(Boolean),
     inclure_caches: $("caches").checked,
+    lire_images: $("lire-images").checked,
+    image_cote_min_px: Number($("image-cote").value),
+    image_taille_max_mo: Number($("image-taille").value),
   };
 }
 
@@ -340,6 +440,25 @@ function repartition(parType) {
   return el("div", { classe: "repartition" }, bande, legende);
 }
 
+function duree(secondes) {
+  if (secondes < 90) return "environ une minute";
+  if (secondes < 3600 * 1.5) return "environ " + Math.round(secondes / 60) + " minutes";
+  return "environ " + (secondes / 3600).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " heures";
+}
+
+function phraseImages(a) {
+  // Ce sont les images qui prennent du temps : on dit combien il en reste, et pour combien
+  // de temps si la vitesse de ce PC a déjà été mesurée. Sinon, aucune durée n'est promise.
+  const n = a.acceptes.images;
+  const reste = a.acceptes.images_a_lire;
+  let texte = "Dont " + pluriel(n, "image") + ". ";
+  if (!reste) return texte + "Toutes sont déjà lues : elles ne le seront pas de nouveau.";
+  texte += reste === n ? "" : pluriel(reste, "image") + (reste > 1 ? " restent à lire. " : " reste à lire. ");
+  if (a.duree_images_s !== null) return texte + "Lecture des images : " + duree(a.duree_images_s) + " sur ce PC.";
+  return texte + "Comptez quelques secondes par image. Fouine mesure la vitesse de ce PC sur les premières images, "
+    + "puis affiche le temps restant pendant l'indexation.";
+}
+
 function afficherApercu(a) {
   const zone = $("apercu");
   zone.replaceChildren();
@@ -351,6 +470,7 @@ function afficherApercu(a) {
       el("div", { classe: "chiffre" }, el("strong", {}, nombre(ecartes)),
         el("span", {}, ecartes > 1 ? "fichiers ou dossiers laissés de côté" : "fichier ou dossier laissé de côté"))));
   if (Object.keys(a.acceptes.par_type).length) zone.append(repartition(a.acceptes.par_type));
+  if (a.acceptes.images) zone.append(el("p", { classe: "apercu-images" }, ico("image"), el("span", {}, phraseImages(a))));
   for (const absent of a.introuvables) {
     zone.append(el("p", { classe: "alerte" }, ico("alerte"), el("span", {}, "Dossier introuvable en ce moment : " + absent)));
   }
@@ -375,7 +495,7 @@ function afficherApercu(a) {
 function phraseBilan(b) {
   const lus = b.nouveaux + b.modifies;
   const morceaux = [
-    pluriel(lus, "fichier") + (lus > 1 ? " lus" : " lu"),
+    pluriel(lus, "fichier") + (lus > 1 ? " lus" : " lu") + (b.images ? " (dont " + pluriel(b.images, "image") + ")" : ""),
     b.inchanges + (b.inchanges > 1 ? " inchangés (non relus)" : " inchangé (non relu)"),
   ];
   if (b.retires) morceaux.push(b.retires + (b.retires > 1 ? " retirés de l'index" : " retiré de l'index"));
@@ -414,11 +534,16 @@ function afficherTache(etat) {
       barre.removeAttribute("value");
       titreEtape = "Préparation du modèle";
       texte = "La toute première fois, il est téléchargé (" + etat.taille_modele + ") : cela peut prendre quelques minutes.";
+    } else if (t.etape === "modele_images") {
+      barre.removeAttribute("value");
+      titreEtape = "Préparation du modèle des images";
+      texte = "La toute première fois, il est téléchargé (" + etat.taille_modele_images + ") : cela peut prendre quelques minutes.";
     } else if (t.etape === "lecture" && t.total) {
       const part = Math.round((t.fait / t.total) * 100);
       barre.value = part;
       pourcent = part + " %";
       titreEtape = "Lecture du fichier " + nombre(Math.min(t.fait + 1, t.total)) + " sur " + nombre(t.total);
+      if (t.reste_s) titreEtape += ", encore " + duree(t.reste_s);
       texte = t.fichier;
     } else {
       barre.removeAttribute("value");
@@ -465,7 +590,7 @@ function brancher() {
   afficherTheme();
   $("aller-regler").addEventListener("click", () => montrer("regler"));
   $("form-recherche").addEventListener("submit", chercher);
-  for (const id of ["extensions", "taille", "exclus", "caches"]) {
+  for (const id of ["extensions", "taille", "exclus", "caches", "lire-images", "image-cote", "image-taille"]) {
     $(id).addEventListener("change", () => enregistrer(lireFormulaire()));
   }
   $("defaut").addEventListener("click", () => enregistrer({ defaut: true }));
@@ -496,7 +621,7 @@ function brancher() {
 async function demarrer() {
   brancher();
   if (!jeton) {
-    alerter("Cette page doit être ouverte par Fouine lui-même. Fermez-la, puis relancez Fouine (lancer.bat).");
+    alerter("Cette page doit être ouverte par Fouine lui-même. Fermez-la, puis relancez Fouine.");
     return;
   }
   const etat = await rafraichir(true);

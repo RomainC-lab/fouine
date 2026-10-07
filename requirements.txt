@@ -1,3 +1,9 @@
 fastembed>=0.7,<1
 numpy>=1.24
 pypdf>=4
+# Déjà installées avec fastembed ; nommées ici parce que Fouine s'en sert directement
+# (lecture des images, second modèle).
+pillow>=10
+onnxruntime>=1.17
+tokenizers>=0.15
+huggingface_hub>=0.23

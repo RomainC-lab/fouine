@@ -1,45 +1,11 @@
-"""Outils communs aux tests : faux modèle d'embedding et fabrication de documents."""
+"""Outils communs aux tests : faux modèles, fabrication de documents et d'images."""
 
 from __future__ import annotations
 
-import hashlib
-import re
 import zipfile
 
-import numpy as np
-
-from fouine.embedding import normaliser
+from fouine.factice import FauxEmbedding, FauxEmbeddingImages  # noqa: F401 - repris par les tests
 from fouine.reglages import reglages_par_defaut
-
-
-class FauxEmbedding:
-    """Remplace le vrai modèle : même forme de résultat, sans rien télécharger.
-
-    Deux textes qui partagent des mots ont des vecteurs proches.
-    """
-
-    nom = "faux-modele"
-    dimension = 384
-
-    def __init__(self):
-        self.appels = 0
-        self.textes_vus: list[str] = []
-
-    def pret(self) -> bool:
-        return True
-
-    def vecteurs(self, textes):
-        self.appels += 1
-        self.textes_vus.extend(textes)
-        matrice = np.zeros((len(textes), self.dimension), dtype=np.float32)
-        for ligne, texte in enumerate(textes):
-            for mot in re.findall(r"\w+", texte.lower()):
-                case = int.from_bytes(hashlib.md5(mot.encode()).digest()[:4], "big") % self.dimension
-                matrice[ligne, case] += 1.0
-        return normaliser(matrice)
-
-    def vecteur_question(self, question):
-        return self.vecteurs([question])[0]
 
 
 def reglages_pour(*dossiers, **changements) -> dict:
@@ -128,4 +94,13 @@ def pdf(chemin, lignes):
     sortie += f"trailer\n<< /Size {len(objets) + 1} /Root 1 0 R >>\nstartxref\n{debut_table}\n%%EOF\n".encode()
     chemin.parent.mkdir(parents=True, exist_ok=True)
     chemin.write_bytes(sortie)
+    return chemin
+
+
+def image(chemin, couleur=(200, 30, 30), taille=(320, 240), **options):
+    """Une image d'une seule couleur, au format donné par l'extension du fichier."""
+    from PIL import Image
+
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", taille, couleur).save(chemin, **options)
     return chemin

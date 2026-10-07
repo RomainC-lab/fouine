@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from .reglages import DOSSIERS_SYSTEME
+from .reglages import DOSSIERS_SYSTEME, EXTENSIONS_IMAGES
 
 # Raisons d'écarter un fichier ou un dossier (textes montrés tels quels).
 SENSIBLE = "Fichier ou dossier sensible"
@@ -25,6 +25,8 @@ CACHE = "Caché"
 LIEN = "Raccourci (lien)"
 TYPE = "Type de fichier non lu"
 TROP_GROS = "Trop gros"
+IMAGE_PETITE = "Image trop petite (icône, miniature)"
+IMAGE_GEANTE = "Image trop grande"
 ILLISIBLE = "Accès refusé"
 
 # Dossiers du système repérés par leur emplacement exact (Linux, macOS).
@@ -48,17 +50,24 @@ class Element:
     est_dossier: bool = False
     taille: int = 0
     modifie: int = 0  # date de modification, en nanosecondes
+    image: bool = False  # vrai pour une image (lue par le second modèle)
 
 
 class Filtres:
     """Les réglages, préparés pour répondre vite à « ce fichier, on le lit ? »."""
 
-    def __init__(self, reglages: dict):
+    def __init__(self, reglages: dict, dimensions_connues=None):
+        """`dimensions_connues(chemin, taille, modifie)` rend (largeur, hauteur) pour une
+        image déjà dans l'index et inchangée : son en-tête n'est alors pas relu."""
         self.exclus = {nom.lower() for nom in reglages["dossiers_exclus"]}
         self.systeme = {nom.lower() for nom in DOSSIERS_SYSTEME}
         self.inclure_caches = bool(reglages["inclure_caches"])
         self.extensions = {ext.lower() for ext in reglages["extensions"]}
         self.taille_max = int(float(reglages["taille_max_mo"]) * 1024 * 1024)
+        self.images = set(EXTENSIONS_IMAGES) if reglages.get("lire_images") else set()
+        self.image_taille_max = int(float(reglages.get("image_taille_max_mo", 40)) * 1024 * 1024)
+        self.image_cote_min = int(reglages.get("image_cote_min_px", 64))
+        self.dimensions_connues = dimensions_connues or (lambda chemin, taille, modifie: None)
         self.motifs = [motif.lower() for motif in reglages["motifs_sensibles"]]
         self.chemins = [
             _parties(chemin)
@@ -111,7 +120,9 @@ class Filtres:
             return SENSIBLE, None
         if not self.inclure_caches and _est_cache(entree):
             return CACHE, None
-        if os.path.splitext(entree.name)[1].lower() not in self.extensions:
+        ext = os.path.splitext(entree.name)[1].lower()
+        image = ext in self.images
+        if not image and ext not in self.extensions:
             return TYPE, None
         try:
             infos = entree.stat(follow_symlinks=False)
@@ -119,9 +130,29 @@ class Filtres:
             return ILLISIBLE, None
         if not stat.S_ISREG(infos.st_mode):
             return TYPE, None
-        if infos.st_size > self.taille_max:
+        if infos.st_size > (self.image_taille_max if image else self.taille_max):
             return TROP_GROS, infos
+        if image:
+            return self._raison_image(entree.path, infos), infos
         return None, infos
+
+    def _raison_image(self, chemin: str, infos: os.stat_result) -> str | None:
+        """Écarte les icônes et les images démesurées, d'après leur taille en points.
+
+        Seul l'en-tête du fichier est lu. Une image dont l'en-tête est illisible
+        est gardée : l'indexation la notera « pas pu être lue ».
+        """
+        from . import images
+
+        taille = self.dimensions_connues(chemin, infos.st_size, infos.st_mtime_ns) or images.dimensions(chemin)
+        if taille is None:
+            return None
+        largeur, hauteur = taille
+        if min(largeur, hauteur) < self.image_cote_min:
+            return IMAGE_PETITE
+        if largeur * hauteur > images.PIXELS_MAX:
+            return IMAGE_GEANTE
+        return None
 
 
 def _parties(chemin: str) -> list[str]:
@@ -191,12 +222,15 @@ def racines_utiles(dossiers: list[str]) -> tuple[list[str], list[str]]:
     return gardes, absents
 
 
-def parcourir(reglages: dict, arret=None) -> Iterator[Element]:
+def parcourir(reglages: dict, arret=None, dimensions_connues=None, dossier_fouine=None) -> Iterator[Element]:
     """Passe dans les dossiers choisis et dit, pour chaque chose vue, si elle est lue.
 
     Un dossier écarté n'est pas ouvert : il compte pour un seul élément.
+    `dossier_fouine` est le dossier de données de Fouine (index, vignettes, modèles) :
+    il n'est jamais lu, même s'il se trouve dans un dossier choisi.
     """
-    filtres = Filtres(reglages)
+    chez_fouine = os.path.normcase(os.path.realpath(dossier_fouine)) if dossier_fouine else None
+    filtres = Filtres(reglages, dimensions_connues)
     racines, _ = racines_utiles(reglages["dossiers"])
     for racine in racines:
         if filtres.racine_sensible(racine):
@@ -224,6 +258,8 @@ def parcourir(reglages: dict, arret=None) -> Iterator[Element]:
                     continue
                 if est_dossier:
                     raison = filtres.raison_dossier(entree)
+                    if raison is None and chez_fouine and os.path.normcase(os.path.realpath(entree.path)) == chez_fouine:
+                        raison = TECHNIQUE
                     if raison:
                         yield Element(entree.path, raison, est_dossier=True)
                     else:
@@ -235,18 +271,27 @@ def parcourir(reglages: dict, arret=None) -> Iterator[Element]:
                     raison,
                     taille=infos.st_size if infos else 0,
                     modifie=infos.st_mtime_ns if infos else 0,
+                    image=os.path.splitext(entree.name)[1].lower() in filtres.images,
                 )
             pile.extend(reversed(sous_dossiers))
 
 
-def apercu(reglages: dict, exemples: int = 5) -> dict:
-    """Compte ce qui serait lu et ce qui serait écarté, raison par raison."""
+def apercu(reglages: dict, exemples: int = 5, dimensions_connues=None, deja_lu=None, dossier_fouine=None) -> dict:
+    """Compte ce qui serait lu et ce qui serait écarté, raison par raison.
+
+    `deja_lu(element)` dit si un fichier est déjà dans l'index, inchangé : cela
+    permet de compter les images qui restent à lire (ce sont elles qui prennent du temps).
+    """
     racines, absents = racines_utiles(reglages["dossiers"])
-    acceptes = {"nombre": 0, "taille": 0, "exemples": [], "par_type": {}}
+    acceptes = {"nombre": 0, "taille": 0, "exemples": [], "par_type": {}, "images": 0, "images_a_lire": 0}
     ecartes: dict[str, dict] = {}
-    for element in parcourir(reglages):
+    for element in parcourir(reglages, dimensions_connues=dimensions_connues, dossier_fouine=dossier_fouine):
         if element.raison is None:
             acceptes["nombre"] += 1
+            if element.image:
+                acceptes["images"] += 1
+                if deja_lu is None or not deja_lu(element):
+                    acceptes["images_a_lire"] += 1
             acceptes["taille"] += element.taille
             if len(acceptes["exemples"]) < exemples:
                 acceptes["exemples"].append(element.chemin)
