@@ -13,7 +13,7 @@ from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 racine = Path(SPECPATH).parent
 
-donnees = [(str(racine / "fouine" / "web"), "fouine/web")]
+donnees = [(str(racine / "fouine" / "web"), "fouine/web"), (str(racine / "fouine" / "icone.png"), "fouine")]
 # Bibliothèques qui lisent leurs propres fichiers ou leur numéro de version une fois installées.
 for paquet in ("fastembed", "huggingface_hub", "onnxruntime", "tokenizers", "tqdm", "requests", "filelock", "numpy"):
     donnees += copy_metadata(paquet)
@@ -23,7 +23,10 @@ analyse = Analysis(
     [str(racine / "emballage" / "fouine_exe.py")],
     pathex=[str(racine)],
     datas=donnees,
-    hiddenimports=["fouine.autotest", "fouine.factice", "PIL.JpegImagePlugin", "PIL.PngImagePlugin",
+    # La fenêtre : pywebview apporte sa propre recette (ses fichiers et le pont vers WebView2) ;
+    # sous Windows il passe par pythonnet (module « clr »), chargé seulement à l'ouverture.
+    hiddenimports=["fouine.autotest", "fouine.factice", "fouine.fenetre", "webview.platforms.winforms",
+                   "webview.platforms.edgechromium", "clr", "PIL.ImageGrab", "PIL.JpegImagePlugin", "PIL.PngImagePlugin",
                    "PIL.WebPImagePlugin", "PIL.GifImagePlugin", "PIL.BmpImagePlugin", "PIL.TiffImagePlugin"],
     excludes=["tkinter", "matplotlib", "IPython", "pytest", "torch", "tensorflow"],
     noarchive=False,
@@ -50,7 +53,7 @@ exe = EXE(
     exclude_binaries=True,
     name="Fouine",
     icon=str(racine / "emballage" / "fouine.ico"),
-    console=True,  # la fenêtre noire reste visible : la fermer arrête Fouine
+    console=False,  # pas de fenêtre noire : les messages vont dans fouine.log (dossier de données)
     upx=False,  # pas de compression : elle déclenche de fausses alertes d'antivirus
 )
 COLLECT(exe, analyse.binaries, analyse.datas, name="Fouine", upx=False)
