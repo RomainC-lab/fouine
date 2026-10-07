@@ -9,7 +9,7 @@ sont envoyés nulle part.
 
 ![Une recherche dans Fouine](docs/capture-recherche.png)
 
-> Première petite version (0.1). Elle fait peu de choses, volontairement.
+> Petite version (0.2). Elle fait peu de choses, volontairement. La 0.2 refait toute l'interface : thème clair et thème sombre (bouton en haut à droite), mêmes fonctions.
 
 ## Ce qui reste sur votre PC, et la seule connexion à Internet
 
@@ -40,6 +40,10 @@ Sous Linux ou macOS : `./installer.sh`, puis `./lancer.sh`.
 Quand vos fichiers changent, relancez « Indexer maintenant » : seuls les fichiers nouveaux ou modifiés sont relus, et les fichiers supprimés sortent de l'index. Cette mise à jour n'est pas automatique.
 
 ![Les filtres et l'aperçu avant indexation](docs/capture-filtres.png)
+
+Le thème sombre suit le réglage de votre PC ; le bouton en haut à droite permet d'en changer.
+
+![Une recherche avec le thème sombre](docs/capture-sombre.png)
 
 ## Ce qui est laissé de côté par défaut
 

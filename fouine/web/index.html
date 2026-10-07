@@ -3,110 +3,238 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Fouine</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTUiIGZpbGw9IiMxYjViNDMiLz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0LjggNi40KSBzY2FsZSguODUpIj4gPHBhdGggZmlsbD0iIzhhNzA1ZSIgZD0iTTguNSAyNUM1LjUgMTMgOS41IDQuNSAxNyA0LjVjNi41IDAgMTAuNSA2IDEwLjUgMTR6Ii8+PHBhdGggZmlsbD0iIzhhNzA1ZSIgZD0iTTU1LjUgMjVDNTguNSAxMyA1NC41IDQuNSA0NyA0LjVjLTYuNSAwLTEwLjUgNi0xMC41IDE0eiIvPiA8cGF0aCBmaWxsPSIjZDNhOTk2IiBkPSJNMTIuNSAyMUMxMSAxNCAxMy41IDkuNSAxNyA5LjVjMy41IDAgNS41IDQgNS41IDl6Ii8+PHBhdGggZmlsbD0iI2QzYTk5NiIgZD0iTTUxLjUgMjFDNTMgMTQgNTAuNSA5LjUgNDcgOS41Yy0zLjUgMC01LjUgNC01LjUgOXoiLz4gPHBhdGggZmlsbD0iIzhhNzA1ZSIgZD0iTTMyIDExYzEyIDAgMjQgNiAyNCAxOCAwIDktOS41IDE0LjUtMTQuNSAyMS0zIDQtNiA2LTkuNSA2cy02LjUtMi05LjUtNkMxNy41IDQzLjUgOCAzOCA4IDI5YzAtMTIgMTItMTggMjQtMTh6Ii8+IDxwYXRoIGZpbGw9IiNmNmVmZTIiIGQ9Ik0zMiAzNWM0IDAgOCAzLjUgOC41IDguNUM0MCA0OSAzNiA1NiAzMiA1NnMtOC03LTguNS0xMi41QzI0IDM4LjUgMjggMzUgMzIgMzV6Ii8+IDxjaXJjbGUgZmlsbD0iIzFjMTUxMiIgY3g9IjIxLjUiIGN5PSIzMCIgcj0iMyIvPjxjaXJjbGUgZmlsbD0iIzFjMTUxMiIgY3g9IjQyLjUiIGN5PSIzMCIgcj0iMyIvPiA8Y2lyY2xlIGZpbGw9IiNmZmZmZmYiIGN4PSIyMi42IiBjeT0iMjguOSIgcj0iMSIvPjxjaXJjbGUgZmlsbD0iI2ZmZmZmZiIgY3g9IjQzLjYiIGN5PSIyOC45IiByPSIxIi8+IDxwYXRoIGZpbGw9IiMyYTFiMTYiIGQ9Ik0yOC4yIDQ3LjJxMy44LTEuNyA3LjYgMC0uNSA0LjMtMy44IDUuMy0zLjMtMS0zLjgtNS4zeiIvPiA8L2c+PC9zdmc+">
 <link rel="stylesheet" href="style.css">
+<script src="app.js"></script>
 </head>
 <body>
+
+<svg class="reserve" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-dossier" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2.2h7.4a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-croix" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-monter" viewBox="0 0 24 24"><path d="M12 19V6M6.5 11.5L12 6l5.5 5.5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-soleil" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8V5M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M5.5 18.5l1.6-1.6M16.9 7.1l1.6-1.6"/></symbol>
+  <symbol id="i-lune" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 0 1 9.8 4 8 8 0 1 0 20 14.2z"/></symbol>
+  <symbol id="i-cadenas" viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></symbol>
+  <symbol id="i-oeil" viewBox="0 0 24 24"><path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-lancer" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-alerte" viewBox="0 0 24 24"><path d="M12 4l9 15.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
+  <symbol id="i-sortir" viewBox="0 0 24 24"><path d="M13.5 5H19v5.5M19 5l-8 8"/><path d="M17 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V9a1.5 1.5 0 0 1 1.5-1.5H11"/></symbol>
+  <symbol id="i-retour" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 5v4.2h4.2"/></symbol>
+</svg>
+
 <header class="entete">
   <div class="largeur entete-ligne">
-    <div>
-      <h1>Fouine</h1>
-      <p class="devise">Retrouvez vos fichiers en décrivant ce qu'ils contiennent. Tout reste sur ce PC.</p>
+    <div class="marque">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+        <path class="f-poil" d="M8.5 25C5.5 13 9.5 4.5 17 4.5c6.5 0 10.5 6 10.5 14z"/><path class="f-poil" d="M55.5 25C58.5 13 54.5 4.5 47 4.5c-6.5 0-10.5 6-10.5 14z"/>
+        <path class="f-oreille" d="M12.5 21C11 14 13.5 9.5 17 9.5c3.5 0 5.5 4 5.5 9z"/><path class="f-oreille" d="M51.5 21C53 14 50.5 9.5 47 9.5c-3.5 0-5.5 4-5.5 9z"/>
+        <path class="f-poil" d="M32 11c12 0 24 6 24 18 0 9-9.5 14.5-14.5 21-3 4-6 6-9.5 6s-6.5-2-9.5-6C17.5 43.5 8 38 8 29c0-12 12-18 24-18z"/>
+        <path class="f-clair" d="M32 35c4 0 8 3.5 8.5 8.5C40 49 36 56 32 56s-8-7-8.5-12.5C24 38.5 28 35 32 35z"/>
+        <circle class="f-oeil" cx="21.5" cy="30" r="3"/><circle class="f-oeil" cx="42.5" cy="30" r="3"/>
+        <circle class="f-reflet" cx="22.6" cy="28.9" r="1"/><circle class="f-reflet" cx="43.6" cy="28.9" r="1"/>
+        <path class="f-nez" d="M28.2 47.2q3.8-1.7 7.6 0-.5 4.3-3.8 5.3-3.3-1-3.8-5.3z"/>
+      </svg>
+      <div>
+        <h1>Fouine</h1>
+        <p class="devise">Tout reste sur ce PC.</p>
+      </div>
     </div>
-    <nav class="onglets" aria-label="Parties de Fouine">
-      <button type="button" class="onglet" data-onglet="chercher" aria-current="page">Chercher</button>
-      <button type="button" class="onglet" data-onglet="regler">Dossiers et filtres</button>
-    </nav>
+    <div class="commandes">
+      <nav class="onglets" aria-label="Parties de Fouine">
+        <button type="button" class="onglet" data-onglet="chercher" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-loupe"/></svg><span>Chercher</span></button>
+        <button type="button" class="onglet" data-onglet="regler"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-dossier"/></svg><span>Dossiers et filtres</span></button>
+      </nav>
+      <button type="button" id="theme" class="rond" aria-label="Passer au thème sombre" title="Changer de thème">
+        <svg class="ico ico-lune" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-lune"/></svg>
+        <svg class="ico ico-soleil" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-soleil"/></svg>
+      </button>
+    </div>
   </div>
 </header>
 
 <main class="largeur">
-  <p id="alerte" class="alerte" role="alert" hidden></p>
+  <p id="alerte" class="alerte" role="alert" hidden>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-alerte"/></svg>
+    <span id="texte-alerte"></span>
+  </p>
 
   <section id="chercher">
-    <form id="form-recherche" class="recherche">
-      <label for="question" class="invisible">Votre recherche</label>
-      <input id="question" type="search" autocomplete="off" placeholder="Par exemple : facture du plombier, recette de la tarte aux pommes…">
-      <button type="submit" class="principal">Chercher</button>
-    </form>
-    <p id="etat-index" class="discret"></p>
+    <div id="accueil" class="accueil" hidden>
+      <svg class="buste" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path class="f-poil" d="M33 120c0-28 6-54 27-54s27 26 27 54z"/>
+        <path class="f-clair" d="M46 79c6-6 22-6 28 0 2 17-3 31-8 41H54c-5-10-10-24-8-41z"/>
+        <g transform="translate(20 2) scale(1.25)">
+          <path class="f-poil" d="M8.5 25C5.5 13 9.5 4.5 17 4.5c6.5 0 10.5 6 10.5 14z"/><path class="f-poil" d="M55.5 25C58.5 13 54.5 4.5 47 4.5c-6.5 0-10.5 6-10.5 14z"/>
+          <path class="f-oreille" d="M12.5 21C11 14 13.5 9.5 17 9.5c3.5 0 5.5 4 5.5 9z"/><path class="f-oreille" d="M51.5 21C53 14 50.5 9.5 47 9.5c-3.5 0-5.5 4-5.5 9z"/>
+          <path class="f-poil" d="M32 11c12 0 24 6 24 18 0 9-9.5 14.5-14.5 21-3 4-6 6-9.5 6s-6.5-2-9.5-6C17.5 43.5 8 38 8 29c0-12 12-18 24-18z"/>
+          <path class="f-clair" d="M32 35c4 0 8 3.5 8.5 8.5C40 49 36 56 32 56s-8-7-8.5-12.5C24 38.5 28 35 32 35z"/>
+          <circle class="f-oeil" cx="21.5" cy="30" r="3"/><circle class="f-oeil" cx="42.5" cy="30" r="3"/>
+          <circle class="f-reflet" cx="22.6" cy="28.9" r="1"/><circle class="f-reflet" cx="43.6" cy="28.9" r="1"/>
+          <path class="f-nez" d="M28.2 47.2q3.8-1.7 7.6 0-.5 4.3-3.8 5.3-3.3-1-3.8-5.3z"/>
+        </g>
+      </svg>
+      <div class="accueil-texte">
+        <h2 id="accueil-titre">Fouine ne connaît encore aucun de vos fichiers.</h2>
+        <p id="accueil-suite">Montrez-lui les dossiers qu'il a le droit de lire. Il les parcourt une fois, puis vous retrouvez un document en décrivant ce qu'il contient.</p>
+        <ol id="marche" class="marche">
+          <li>Choisissez vos dossiers.</li>
+          <li>Vérifiez ce qui sera lu et ce qui sera laissé de côté.</li>
+          <li>Lancez l'indexation, puis revenez chercher ici.</li>
+        </ol>
+        <p class="actions">
+          <button type="button" id="aller-regler" class="principal grand"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-dossier"/></svg><span id="accueil-bouton">Choisir mes dossiers</span></button>
+        </p>
+      </div>
+    </div>
+
+    <div id="zone-recherche">
+      <div class="amorce">
+        <h2>Que cherchez-vous&nbsp;?</h2>
+        <p>Décrivez ce que contient le fichier, avec vos mots.</p>
+      </div>
+      <form id="form-recherche" class="recherche">
+        <svg class="guetteur" viewBox="0 0 120 74" aria-hidden="true" focusable="false">
+          <g transform="translate(20 2) scale(1.25)">
+            <g class="f-oreille-g"><path class="f-poil" d="M8.5 25C5.5 13 9.5 4.5 17 4.5c6.5 0 10.5 6 10.5 14z"/><path class="f-oreille" d="M12.5 21C11 14 13.5 9.5 17 9.5c3.5 0 5.5 4 5.5 9z"/></g>
+            <g class="f-oreille-d"><path class="f-poil" d="M55.5 25C58.5 13 54.5 4.5 47 4.5c-6.5 0-10.5 6-10.5 14z"/><path class="f-oreille" d="M51.5 21C53 14 50.5 9.5 47 9.5c-3.5 0-5.5 4-5.5 9z"/></g>
+            <path class="f-poil" d="M32 11c12 0 24 6 24 18 0 9-9.5 14.5-14.5 21-3 4-6 6-9.5 6s-6.5-2-9.5-6C17.5 43.5 8 38 8 29c0-12 12-18 24-18z"/>
+            <path class="f-clair" d="M32 35c4 0 8 3.5 8.5 8.5C40 49 36 56 32 56s-8-7-8.5-12.5C24 38.5 28 35 32 35z"/>
+            <g class="f-yeux">
+              <circle class="f-oeil" cx="21.5" cy="30" r="3"/><circle class="f-oeil" cx="42.5" cy="30" r="3"/>
+              <circle class="f-reflet" cx="22.6" cy="28.9" r="1"/><circle class="f-reflet" cx="43.6" cy="28.9" r="1"/>
+            </g>
+            <path class="f-nez" d="M28.2 47.2q3.8-1.7 7.6 0-.5 4.3-3.8 5.3-3.3-1-3.8-5.3z"/>
+          </g>
+          <ellipse class="f-patte" cx="27" cy="69" rx="9.5" ry="5.5"/><ellipse class="f-patte" cx="93" cy="69" rx="9.5" ry="5.5"/>
+          <path class="f-trait" d="M24.5 67.5v4M29.5 67.5v4M90.5 67.5v4M95.5 67.5v4"/>
+        </svg>
+        <label for="question" class="invisible">Votre recherche</label>
+        <svg class="ico loupe" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-loupe"/></svg>
+        <input id="question" type="search" autocomplete="off" placeholder="Facture du plombier, recette de la tarte aux pommes…">
+        <button type="submit" class="principal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-loupe"/></svg><span>Chercher</span></button>
+      </form>
+      <p id="etat-index" class="discret"></p>
+    </div>
     <div id="resultats" aria-live="polite"></div>
   </section>
 
   <section id="regler" hidden>
-    <div class="bloc">
-      <h2>1. Les dossiers à lire</h2>
-      <p class="discret">Fouine ne lit que les dossiers de cette liste, et rien d'autre sur le PC.</p>
-      <ul id="liste-dossiers" class="liste-dossiers"></ul>
-      <div id="propositions" class="propositions"></div>
-      <button type="button" id="ajouter-dossier">Ajouter un dossier…</button>
-    </div>
+    <ol class="etapes">
+      <li class="etape">
+        <span class="numero" aria-hidden="true">1</span>
+        <div class="bloc">
+          <h2><span class="invisible">Étape 1 : </span>Les dossiers à lire</h2>
+          <p class="discret">Fouine ne lit que les dossiers de cette liste, et rien d'autre sur le PC.</p>
+          <ul id="liste-dossiers" class="liste-dossiers"></ul>
+          <div id="propositions" class="propositions"></div>
+          <button type="button" id="ajouter-dossier"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-plus"/></svg>Ajouter un dossier…</button>
+        </div>
+      </li>
 
-    <div class="bloc">
-      <h2>2. Ce qui est laissé de côté</h2>
-      <div class="champ">
-        <label for="extensions">Types de fichiers lus</label>
-        <input id="extensions" type="text" spellcheck="false">
-        <p class="aide">Séparés par des espaces. Tout autre type (photos, vidéos, musique, archives, programmes…) n'est jamais ouvert.</p>
-      </div>
-      <div class="champ court">
-        <label for="taille">Taille maximale d'un fichier, en Mo</label>
-        <input id="taille" type="number" min="1" max="2000" step="1">
-      </div>
-      <div class="champ">
-        <label for="exclus">Noms de dossiers jamais ouverts</label>
-        <textarea id="exclus" rows="5" spellcheck="false"></textarea>
-        <p class="aide">Un nom par ligne : dossiers de Windows, des programmes, dossiers techniques.</p>
-      </div>
-      <div class="champ case">
-        <input id="caches" type="checkbox">
-        <label for="caches">Lire aussi les fichiers et dossiers cachés</label>
-      </div>
-      <details>
-        <summary>Fichiers sensibles : jamais lus</summary>
-        <p class="aide">Mots de passe, clés, portefeuilles, profils de navigateur. Un fichier ou un dossier dont le nom correspond à l'un de ces motifs n'est jamais ouvert (« * » remplace n'importe quoi).</p>
-        <p id="sensibles" class="motifs"></p>
-        <p class="aide">Cette liste se change seulement dans le fichier de réglages : <span id="fichier-reglages" class="chemin"></span></p>
-      </details>
-      <p class="actions">
-        <button type="button" id="defaut">Remettre les filtres d'origine</button>
-        <span id="enregistre" class="discret" aria-live="polite"></span>
-      </p>
-    </div>
+      <li class="etape">
+        <span class="numero" aria-hidden="true">2</span>
+        <div class="bloc">
+          <h2><span class="invisible">Étape 2 : </span>Ce qui est laissé de côté</h2>
+          <div class="champ">
+            <label for="extensions">Types de fichiers lus</label>
+            <input id="extensions" type="text" spellcheck="false">
+            <p class="aide">Séparés par des espaces. Tout autre type (photos, vidéos, musique, archives, programmes…) n'est jamais ouvert.</p>
+          </div>
+          <div class="champ court">
+            <label for="taille">Taille maximale d'un fichier, en Mo</label>
+            <input id="taille" type="number" min="1" max="2000" step="1">
+          </div>
+          <div class="champ">
+            <label for="exclus">Noms de dossiers jamais ouverts</label>
+            <textarea id="exclus" rows="5" spellcheck="false"></textarea>
+            <p class="aide">Un nom par ligne : dossiers de Windows, des programmes, dossiers techniques.</p>
+          </div>
+          <div class="champ case">
+            <input id="caches" type="checkbox">
+            <label for="caches">Lire aussi les fichiers et dossiers cachés</label>
+          </div>
+          <details class="sensibles">
+            <summary><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-cadenas"/></svg>Fichiers sensibles : jamais lus</summary>
+            <p class="aide">Mots de passe, clés, portefeuilles, profils de navigateur. Un fichier ou un dossier dont le nom correspond à l'un de ces motifs n'est jamais ouvert (« * » remplace n'importe quoi).</p>
+            <p id="sensibles" class="motifs"></p>
+            <p class="aide">Cette liste se change seulement dans le fichier de réglages : <span id="fichier-reglages" class="chemin"></span></p>
+          </details>
+          <p class="actions">
+            <button type="button" id="defaut"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-retour"/></svg>Remettre les filtres d'origine</button>
+            <span id="enregistre" class="enregistre" aria-live="polite"></span>
+          </p>
+        </div>
+      </li>
 
-    <div class="bloc">
-      <h2>3. Vérifier, puis indexer</h2>
-      <p class="discret">L'aperçu compte les fichiers sans les ouvrir. L'indexation les lit ; la première fois elle peut être longue, les suivantes ne relisent que ce qui a changé.</p>
-      <p class="actions">
-        <button type="button" id="voir-apercu">Voir ce qui serait lu</button>
-        <button type="button" id="indexer" class="principal">Indexer maintenant</button>
-        <button type="button" id="arreter" hidden>Arrêter</button>
-      </p>
-      <div id="progression" hidden>
-        <progress id="barre" max="100" value="0"></progress>
-        <p id="texte-progression" class="discret"></p>
-      </div>
-      <p id="bilan" class="bilan" hidden></p>
-      <div id="illisibles"></div>
-      <div id="apercu"></div>
-    </div>
+      <li class="etape">
+        <span class="numero" aria-hidden="true">3</span>
+        <div class="bloc">
+          <h2><span class="invisible">Étape 3 : </span>Vérifier, puis indexer</h2>
+          <p class="discret">L'aperçu compte les fichiers sans les ouvrir. L'indexation les lit ; la première fois elle peut être longue, les suivantes ne relisent que ce qui a changé.</p>
+          <p class="actions">
+            <button type="button" id="voir-apercu"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-oeil"/></svg>Voir ce qui serait lu</button>
+            <button type="button" id="indexer" class="principal"><svg class="ico plein" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-lancer"/></svg>Indexer maintenant</button>
+            <button type="button" id="arreter" hidden><svg class="ico plein" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-stop"/></svg>Arrêter</button>
+          </p>
+          <div id="progression" class="progression" hidden>
+            <div class="progression-tete">
+              <p id="titre-progression" class="progression-titre"></p>
+              <p id="pourcent" class="pourcent" aria-hidden="true"></p>
+            </div>
+            <progress id="barre" max="100" value="0" aria-labelledby="titre-progression"></progress>
+            <p id="texte-progression" class="discret"></p>
+          </div>
+          <p id="bilan" class="bilan" hidden>
+            <svg class="ico ico-ok" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-check"/></svg>
+            <svg class="ico ico-souci" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-alerte"/></svg>
+            <span id="texte-bilan"></span>
+          </p>
+          <div id="illisibles"></div>
+          <div id="apercu"></div>
+        </div>
+      </li>
+    </ol>
   </section>
 </main>
 
-<dialog id="choix-dossier">
-  <h2>Choisir un dossier</h2>
-  <p id="dossier-courant" class="chemin"></p>
+<dialog id="choix-dossier" aria-labelledby="titre-choix">
+  <h2 id="titre-choix">Choisir un dossier</h2>
+  <p class="courant"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-dossier"/></svg><span id="dossier-courant" class="chemin"></span></p>
   <ul id="sous-dossiers" class="sous-dossiers"></ul>
   <p class="actions">
-    <button type="button" id="choisir" class="principal">Choisir ce dossier</button>
+    <button type="button" id="choisir" class="principal"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Choisir ce dossier</button>
     <button type="button" id="annuler">Annuler</button>
   </p>
 </dialog>
 
 <footer class="largeur pied">
-  <p>Fouine <span id="version"></span> · Cette page vient de votre PC (127.0.0.1) ; elle ne charge rien depuis Internet.</p>
+  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-cadenas"/></svg>
+  <p>Fouine <span id="version"></span>. Cette page vient de votre PC (127.0.0.1) ; elle ne charge rien depuis Internet.</p>
 </footer>
-<script src="app.js"></script>
+
+<template id="t-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-loupe"/></svg></template>
+<template id="t-bredouille">
+  <svg class="buste" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+    <path class="f-poil" d="M33 120c0-28 6-54 27-54s27 26 27 54z"/>
+    <path class="f-clair" d="M46 79c6-6 22-6 28 0 2 17-3 31-8 41H54c-5-10-10-24-8-41z"/>
+    <g transform="rotate(-9 60 60) translate(20 2) scale(1.25)">
+      <path class="f-poil" d="M8.5 25C5.5 13 9.5 4.5 17 4.5c6.5 0 10.5 6 10.5 14z"/><path class="f-poil" d="M55.5 25C58.5 13 54.5 4.5 47 4.5c-6.5 0-10.5 6-10.5 14z"/>
+      <path class="f-oreille" d="M12.5 21C11 14 13.5 9.5 17 9.5c3.5 0 5.5 4 5.5 9z"/><path class="f-oreille" d="M51.5 21C53 14 50.5 9.5 47 9.5c-3.5 0-5.5 4-5.5 9z"/>
+      <path class="f-poil" d="M32 11c12 0 24 6 24 18 0 9-9.5 14.5-14.5 21-3 4-6 6-9.5 6s-6.5-2-9.5-6C17.5 43.5 8 38 8 29c0-12 12-18 24-18z"/>
+      <path class="f-clair" d="M32 35c4 0 8 3.5 8.5 8.5C40 49 36 56 32 56s-8-7-8.5-12.5C24 38.5 28 35 32 35z"/>
+      <circle class="f-oeil" cx="21.5" cy="30" r="3"/><circle class="f-oeil" cx="42.5" cy="30" r="3"/>
+      <circle class="f-reflet" cx="22.6" cy="28.9" r="1"/><circle class="f-reflet" cx="43.6" cy="28.9" r="1"/>
+      <path class="f-nez" d="M28.2 47.2q3.8-1.7 7.6 0-.5 4.3-3.8 5.3-3.3-1-3.8-5.3z"/>
+    </g>
+  </svg>
+</template>
 </body>
 </html>

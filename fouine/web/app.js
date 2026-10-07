@@ -2,6 +2,29 @@
 // Interface de Fouine. Tout texte venu des fichiers est posé avec textContent,
 // jamais interprété comme du HTML.
 
+// -------------------------------------------------------------------- thème
+// Ce bloc s'exécute avant l'affichage de la page, pour éviter un éclair de la mauvaise couleur.
+
+const racine = document.documentElement;
+const prefereSombre = window.matchMedia("(prefers-color-scheme: dark)");
+
+function themeRetenu() {
+  try {
+    const choix = localStorage.getItem("fouine-theme");
+    return choix === "dark" || choix === "light" ? choix : null;
+  } catch (erreur) {
+    return null; // stockage refusé par le navigateur : on suit le système
+  }
+}
+
+function themeActuel() {
+  return racine.dataset.theme || (prefereSombre.matches ? "dark" : "light");
+}
+
+if (themeRetenu()) racine.dataset.theme = themeRetenu();
+
+// ------------------------------------------------------------------- outils
+
 const $ = (id) => document.getElementById(id);
 const jeton = location.hash.slice(1);
 let reglages = null;
@@ -20,6 +43,17 @@ function el(balise, proprietes, ...enfants) {
   return noeud;
 }
 
+function modele(id) {
+  return $(id).content.firstElementChild.cloneNode(true);
+}
+
+function ico(nom, classe) {
+  const dessin = modele("t-ico");
+  dessin.querySelector("use").setAttribute("href", "#i-" + nom);
+  if (classe) dessin.classList.add(...classe.split(" "));
+  return dessin;
+}
+
 function nombre(n) { return n.toLocaleString("fr-FR"); }
 function pluriel(n, mot) { return nombre(n) + " " + mot + (n > 1 ? "s" : ""); }
 function taille(octets) {
@@ -27,8 +61,22 @@ function taille(octets) {
   return (octets / 1024 / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo";
 }
 
+// Familles de fichiers : une couleur et une pastille par famille.
+const FAMILLES = {
+  pdf: "pdf",
+  docx: "texte", doc: "texte", odt: "texte", rtf: "texte",
+  xlsx: "tableur", xls: "tableur", ods: "tableur", csv: "tableur", tsv: "tableur",
+  pptx: "diapo", ppt: "diapo", odp: "diapo",
+  html: "web", htm: "web",
+};
+function extension(nom) {
+  const point = nom.lastIndexOf(".");
+  return point > 0 ? nom.slice(point + 1).toLowerCase() : "";
+}
+function famille(ext) { return FAMILLES[ext.replace(/^\./, "")] || "note"; }
+
 function alerter(message) {
-  $("alerte").textContent = message || "";
+  $("texte-alerte").textContent = message || "";
   $("alerte").hidden = !message;
 }
 
@@ -58,6 +106,18 @@ async function essayer(travail) {
   }
 }
 
+function afficherTheme() {
+  const sombre = themeActuel() === "dark";
+  $("theme").setAttribute("aria-label", sombre ? "Passer au thème clair" : "Passer au thème sombre");
+}
+
+function changerTheme() {
+  const nouveau = themeActuel() === "dark" ? "light" : "dark";
+  racine.dataset.theme = nouveau;
+  try { localStorage.setItem("fouine-theme", nouveau); } catch (erreur) { /* le choix vaut pour cette page */ }
+  afficherTheme();
+}
+
 // ------------------------------------------------------------------ onglets
 
 function montrer(onglet) {
@@ -67,7 +127,7 @@ function montrer(onglet) {
   }
   $("chercher").hidden = onglet !== "chercher";
   $("regler").hidden = onglet !== "regler";
-  if (onglet === "chercher") $("question").focus();
+  if (onglet === "chercher" && !$("zone-recherche").hidden) $("question").focus();
 }
 
 // ---------------------------------------------------------------- recherche
@@ -75,7 +135,7 @@ function montrer(onglet) {
 function surligner(texte, mots) {
   // Met en valeur les mots de la question, sans tenir compte des accents ni des majuscules.
   const morceau = document.createDocumentFragment();
-  const sansAccent = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const sansAccent = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const cibles = mots.map(sansAccent).filter((m) => m.length > 2);
   let reste = 0;
   const mot = /[\p{L}\p{N}]+/gu;
@@ -90,56 +150,88 @@ function surligner(texte, mots) {
   return morceau;
 }
 
+function pastille(nom) {
+  const ext = extension(nom);
+  return el("span", { classe: "type type-" + famille(ext), "aria-hidden": "true" }, ext.slice(0, 4) || "?");
+}
+
+function titre(nom) {
+  const ext = extension(nom);
+  if (!ext) return el("h3", {}, nom);
+  return el("h3", {}, nom.slice(0, -ext.length - 1), el("span", { classe: "ext" }, "." + ext));
+}
+
 function afficherResultats(question, resultats) {
   const zone = $("resultats");
   zone.replaceChildren();
   if (!resultats.length) {
-    zone.append(el("p", { classe: "vide" }, "Rien trouvé pour cette recherche. Essayez avec d'autres mots."));
+    zone.append(
+      el("div", { classe: "bredouille" },
+        modele("t-bredouille"),
+        el("div", {},
+          el("h3", {}, "Rien trouvé pour « " + question + " »."),
+          el("ul", {},
+            el("li", {}, "Essayez d'autres mots, ou décrivez le contenu autrement."),
+            el("li", {}, "Si le fichier est récent, relancez l'indexation dans « Dossiers et filtres ».")))));
     return;
   }
   const mots = question.split(/\s+/).filter(Boolean);
+  zone.append(el("p", { classe: "compte" },
+    resultats.length > 1 ? nombre(resultats.length) + " fichiers trouvés" : "1 fichier trouvé"));
   for (const r of resultats) {
     const ouvrir = (quoi) => () => essayer(() => appeler("ouvrir", { id: r.id, quoi }));
     zone.append(
       el("article", { classe: "resultat" },
-        el("h3", {}, r.nom),
+        pastille(r.nom),
+        el("div", { classe: "resultat-tete" },
+          titre(r.nom),
+          el("span", { classe: "date" }, "Modifié le " + r.modifie)),
         el("p", { classe: "extrait" }, surligner(r.extrait, mots)),
-        el("p", { classe: "ou" },
-          el("span", { classe: "chemin" }, r.dossier),
-          el("span", { classe: "discret" }, "Modifié le " + r.modifie)),
+        el("p", { classe: "ou" }, ico("dossier"), el("span", { classe: "chemin" }, r.dossier)),
         el("p", { classe: "actions" },
-          el("button", { type: "button", classe: "petit", clic: ouvrir("fichier") }, "Ouvrir le fichier"),
-          el("button", { type: "button", classe: "petit", clic: ouvrir("dossier") }, "Ouvrir le dossier"))));
+          el("button", { type: "button", classe: "petit", clic: ouvrir("fichier") }, ico("sortir"), "Ouvrir le fichier"),
+          el("button", { type: "button", classe: "petit", clic: ouvrir("dossier") }, ico("dossier"), "Ouvrir le dossier"))));
   }
+}
+
+function afficherAttente() {
+  const fantome = () => el("div", { classe: "fantome", "aria-hidden": "true" }, el("i"), el("i"), el("i"), el("i"));
+  $("resultats").replaceChildren(el("p", { classe: "attente" }, "Fouine cherche…"), fantome(), fantome(), fantome());
 }
 
 async function chercher(evenement) {
   evenement.preventDefault();
   const question = $("question").value.trim();
   if (!question) return;
-  $("resultats").replaceChildren(el("p", { classe: "vide" }, "Recherche en cours…"));
+  $("form-recherche").classList.add("flaire");
+  afficherAttente();
   const reponse = await essayer(() => appeler("recherche", { question }));
+  $("form-recherche").classList.remove("flaire");
   if (reponse) afficherResultats(question, reponse.resultats);
   else $("resultats").replaceChildren();
 }
 
 function afficherEtatIndex(etat) {
   const index = etat.index;
-  if (!index.fichiers) {
-    $("etat-index").textContent = "";
-    if (!$("resultats").querySelector(".resultat")) {
-      $("resultats").replaceChildren(
-        el("div", { classe: "vide" },
-          el("p", {}, "Aucun fichier n'est encore indexé."),
-          el("p", {}, "Choisissez d'abord les dossiers que Fouine a le droit de lire."),
-          el("button", { type: "button", classe: "principal", clic: () => montrer("regler") }, "Choisir mes dossiers")));
-    }
+  const vide = !index.fichiers;
+  $("accueil").hidden = !vide;
+  $("zone-recherche").hidden = vide;
+  if (vide) {
+    $("resultats").replaceChildren();
+    const lecture = etat.tache.en_cours;
+    $("accueil-titre").textContent = lecture
+      ? "Fouine lit vos fichiers pour la première fois."
+      : "Fouine ne connaît encore aucun de vos fichiers.";
+    $("accueil-suite").textContent = lecture
+      ? "Vous pourrez chercher dès que les premiers fichiers seront lus. La progression s'affiche dans « Dossiers et filtres »."
+      : "Montrez-lui les dossiers qu'il a le droit de lire. Il les parcourt une fois, puis vous retrouvez un document en décrivant ce qu'il contient.";
+    $("marche").hidden = lecture;
+    $("accueil-bouton").textContent = lecture ? "Voir la progression" : "Choisir mes dossiers";
     return;
   }
-  if ($("resultats").querySelector(".vide button")) $("resultats").replaceChildren();
   let texte = pluriel(index.fichiers, "fichier") + " dans l'index";
-  if (index.derniere_indexation) texte += " · mis à jour le " + index.derniere_indexation;
-  if (etat.tache.en_cours) texte += " · indexation en cours";
+  if (index.derniere_indexation) texte += ", mis à jour le " + index.derniere_indexation;
+  texte += etat.tache.en_cours ? ". Indexation en cours." : ".";
   $("etat-index").textContent = texte;
 }
 
@@ -150,28 +242,29 @@ function afficherReglages(etat) {
   const liste = $("liste-dossiers");
   liste.replaceChildren();
   if (!reglages.dossiers.length) {
-    liste.append(el("li", {}, el("span", { classe: "discret" }, "Aucun dossier pour l'instant.")));
+    liste.append(el("li", { classe: "aucun" }, "Aucun dossier pour l'instant. Ajoutez-en un ci-dessous."));
   }
   for (const dossier of reglages.dossiers) {
     liste.append(
       el("li", {},
+        ico("dossier"),
         el("span", { classe: "chemin" }, dossier),
         el("button", { type: "button", classe: "petit", "aria-label": "Retirer " + dossier,
-          clic: () => changerDossiers(reglages.dossiers.filter((d) => d !== dossier)) }, "Retirer")));
+          clic: () => changerDossiers(reglages.dossiers.filter((d) => d !== dossier)) }, ico("croix"), "Retirer")));
   }
   const propositions = $("propositions");
   propositions.replaceChildren();
   for (const dossier of etat.dossiers_proposes.filter((d) => !reglages.dossiers.includes(d))) {
     const nom = dossier.split(/[\\/]/).filter(Boolean).pop();
     propositions.append(
-      el("button", { type: "button", classe: "petit", title: dossier,
-        clic: () => changerDossiers(reglages.dossiers.concat([dossier])) }, "+ " + nom));
+      el("button", { type: "button", classe: "petit", title: dossier, "aria-label": "Ajouter le dossier " + nom,
+        clic: () => changerDossiers(reglages.dossiers.concat([dossier])) }, ico("plus"), nom));
   }
   $("extensions").value = reglages.extensions.join(" ");
   $("taille").value = reglages.taille_max_mo;
   $("exclus").value = reglages.dossiers_exclus.join("\n");
   $("caches").checked = reglages.inclure_caches;
-  $("sensibles").replaceChildren(...reglages.motifs_sensibles.flatMap((m) => [el("span", {}, m), " "]));
+  $("sensibles").replaceChildren(...reglages.motifs_sensibles.map((m) => el("span", {}, m)));
   $("fichier-reglages").textContent = etat.fichier_reglages;
   $("version").textContent = etat.version;
 }
@@ -211,10 +304,12 @@ async function allerDans(chemin) {
   const liste = $("sous-dossiers");
   liste.replaceChildren();
   if (reponse.parent !== null) {
-    liste.append(el("li", {}, el("button", { type: "button", clic: () => allerDans(reponse.parent) }, "↑ Remonter d'un niveau")));
+    liste.append(el("li", {}, el("button", { type: "button", clic: () => allerDans(reponse.parent) },
+      ico("monter"), "Remonter d'un niveau")));
   }
   for (const sous of reponse.sous_dossiers) {
-    liste.append(el("li", {}, el("button", { type: "button", clic: () => allerDans(sous.chemin) }, sous.nom)));
+    liste.append(el("li", {}, el("button", { type: "button", clic: () => allerDans(sous.chemin) },
+      ico("dossier"), sous.nom, ico("chevron", "fin"))));
   }
   if (!reponse.sous_dossiers.length) {
     liste.append(el("li", { classe: "vide" }, "Pas de sous-dossier ici."));
@@ -223,40 +318,58 @@ async function allerDans(chemin) {
 
 // ------------------------------------------------------ aperçu et indexation
 
+function listeChemins(chemins) {
+  return el("ul", { classe: "liste-chemins" }, ...chemins.map((c) => el("li", { classe: "chemin" }, c)));
+}
+
+function repartition(parType) {
+  // Une bande colorée : la part de chaque type parmi les fichiers qui seraient lus.
+  const types = Object.entries(parType).sort((x, y) => y[1] - x[1]);
+  const bande = el("div", { classe: "bande", "aria-hidden": "true" });
+  const legende = el("ul", { classe: "legende" });
+  for (const [ext, n] of types) {
+    const couleur = "var(--t-" + famille(ext) + ")";
+    const part = el("i");
+    part.style.flexGrow = String(n);
+    part.style.setProperty("--c", couleur);
+    bande.append(part);
+    const ligne = el("li", {}, el("b", {}, nombre(n)), ext);
+    ligne.style.setProperty("--c", couleur);
+    legende.append(ligne);
+  }
+  return el("div", { classe: "repartition" }, bande, legende);
+}
+
 function afficherApercu(a) {
   const zone = $("apercu");
   zone.replaceChildren();
   const ecartes = a.ecartes.reduce((s, g) => s + g.fichiers + g.dossiers, 0);
-  const types = Object.entries(a.acceptes.par_type).sort((x, y) => y[1] - x[1])
-    .map(([ext, n]) => nombre(n) + " " + ext).join(" · ");
   zone.append(
     el("div", { classe: "chiffres" },
       el("div", { classe: "chiffre lus" }, el("strong", {}, nombre(a.acceptes.nombre)),
-        (a.acceptes.nombre > 1 ? "fichiers seraient lus" : "fichier serait lu") + " (" + taille(a.acceptes.taille) + ")"),
+        el("span", {}, (a.acceptes.nombre > 1 ? "fichiers seraient lus" : "fichier serait lu") + " (" + taille(a.acceptes.taille) + ")")),
       el("div", { classe: "chiffre" }, el("strong", {}, nombre(ecartes)),
-        ecartes > 1 ? "fichiers ou dossiers laissés de côté" : "fichier ou dossier laissé de côté")));
-  if (types) zone.append(el("p", { classe: "discret" }, "Lus : " + types));
+        el("span", {}, ecartes > 1 ? "fichiers ou dossiers laissés de côté" : "fichier ou dossier laissé de côté"))));
+  if (Object.keys(a.acceptes.par_type).length) zone.append(repartition(a.acceptes.par_type));
   for (const absent of a.introuvables) {
-    zone.append(el("p", { classe: "alerte" }, "Dossier introuvable en ce moment : " + absent));
+    zone.append(el("p", { classe: "alerte" }, ico("alerte"), el("span", {}, "Dossier introuvable en ce moment : " + absent)));
   }
   if (a.acceptes.exemples.length) {
-    zone.append(el("details", {}, el("summary", {}, "Exemples de fichiers lus"),
-      el("ul", { classe: "raisons-liste" }, ...a.acceptes.exemples.map((c) => el("li", { classe: "chemin" }, c)))));
+    zone.append(el("details", {}, el("summary", {}, "Exemples de fichiers lus"), listeChemins(a.acceptes.exemples)));
   }
   if (!a.ecartes.length) return;
-  const corps = el("tbody", {});
+  const raisons = el("ul", { classe: "raisons" });
   for (const g of a.ecartes) {
     const combien = [g.fichiers ? pluriel(g.fichiers, "fichier") : "", g.dossiers ? pluriel(g.dossiers, "dossier") : ""]
       .filter(Boolean).join(", ");
-    corps.append(el("tr", {},
-      el("td", {}, g.raison),
-      el("td", { classe: "nombre" }, combien),
-      el("td", {}, el("ul", {}, ...g.exemples.map((c) => el("li", { classe: "chemin" }, c))))));
+    raisons.append(el("li", { classe: "raison" },
+      el("div", {}, el("h4", {}, g.raison), el("p", { classe: "combien" }, combien)),
+      listeChemins(g.exemples)));
   }
-  zone.append(el("table", { classe: "raisons" },
-    el("thead", {}, el("tr", {}, el("th", {}, "Laissé de côté parce que"), el("th", {}, "Combien"), el("th", {}, "Exemples"))),
-    corps));
-  zone.append(el("p", { classe: "aide" }, "Un dossier laissé de côté n'est pas ouvert : il compte pour un, quel que soit son contenu."));
+  zone.append(
+    el("h3", { classe: "raisons-titre" }, "Laissé de côté, raison par raison"),
+    raisons,
+    el("p", { classe: "aide" }, "Un dossier laissé de côté n'est pas ouvert : il compte pour un, quel que soit son contenu."));
 }
 
 function phraseBilan(b) {
@@ -281,8 +394,8 @@ async function afficherIllisibles(etat) {
   zone.replaceChildren(el("details", {},
     el("summary", {}, pluriel(etat.index.illisibles, "fichier")
       + (etat.index.illisibles > 1 ? " n'ont pas pu être lus" : " n'a pas pu être lu")),
-    el("ul", { classe: "raisons-liste" },
-      ...reponse.illisibles.map((i) => el("li", {}, el("span", { classe: "chemin" }, i.chemin), " — " + i.erreur)))));
+    el("ul", { classe: "liste-chemins" },
+      ...reponse.illisibles.map((i) => el("li", {}, el("span", { classe: "chemin" }, i.chemin), " : " + i.erreur)))));
 }
 
 function afficherTache(etat) {
@@ -294,23 +407,33 @@ function afficherTache(etat) {
   $("progression").hidden = !t.en_cours;
   if (t.en_cours) {
     const barre = $("barre");
+    let titreEtape;
     let texte;
+    let pourcent = "";
     if (t.etape === "modele") {
       barre.removeAttribute("value");
-      texte = "Préparation du modèle. La toute première fois, il est téléchargé (" + etat.taille_modele + ") : cela peut prendre quelques minutes.";
+      titreEtape = "Préparation du modèle";
+      texte = "La toute première fois, il est téléchargé (" + etat.taille_modele + ") : cela peut prendre quelques minutes.";
     } else if (t.etape === "lecture" && t.total) {
-      barre.value = Math.round((t.fait / t.total) * 100);
-      texte = "Fichier " + nombre(t.fait + 1) + " sur " + nombre(t.total) + " : " + t.fichier;
+      const part = Math.round((t.fait / t.total) * 100);
+      barre.value = part;
+      pourcent = part + " %";
+      titreEtape = "Lecture du fichier " + nombre(Math.min(t.fait + 1, t.total)) + " sur " + nombre(t.total);
+      texte = t.fichier;
     } else {
       barre.removeAttribute("value");
-      texte = "Recherche des fichiers nouveaux ou modifiés…";
+      titreEtape = "Recherche des fichiers nouveaux ou modifiés…";
+      texte = "";
     }
+    $("titre-progression").textContent = titreEtape;
+    $("pourcent").textContent = pourcent;
     $("texte-progression").textContent = texte;
+    $("texte-progression").classList.toggle("chemin", t.etape === "lecture");
     $("bilan").hidden = true;
   } else if (t.erreur || t.bilan) {
     $("bilan").hidden = false;
     $("bilan").classList.toggle("erreur", Boolean(t.erreur));
-    $("bilan").textContent = t.erreur ? "L'indexation s'est arrêtée sur une erreur : " + t.erreur : phraseBilan(t.bilan);
+    $("texte-bilan").textContent = t.erreur ? "L'indexation s'est arrêtée sur une erreur : " + t.erreur : phraseBilan(t.bilan);
   }
   if (t.en_cours && !suivi) suivi = setInterval(() => rafraichir(false), 1000);
   if (!t.en_cours && suivi) { clearInterval(suivi); suivi = null; }
@@ -337,6 +460,10 @@ function brancher() {
   for (const bouton of document.querySelectorAll(".onglet")) {
     bouton.addEventListener("click", () => montrer(bouton.dataset.onglet));
   }
+  $("theme").addEventListener("click", changerTheme);
+  prefereSombre.addEventListener("change", afficherTheme);
+  afficherTheme();
+  $("aller-regler").addEventListener("click", () => montrer("regler"));
   $("form-recherche").addEventListener("submit", chercher);
   for (const id of ["extensions", "taille", "exclus", "caches"]) {
     $(id).addEventListener("change", () => enregistrer(lireFormulaire()));
@@ -373,8 +500,7 @@ async function demarrer() {
     return;
   }
   const etat = await rafraichir(true);
-  if (etat && !etat.index.fichiers) montrer("regler");
-  else $("question").focus();
+  if (etat && etat.index.fichiers) $("question").focus();
 }
 
-demarrer();
+document.addEventListener("DOMContentLoaded", demarrer);
