@@ -12,6 +12,9 @@ import sys
 from pathlib import Path
 
 NOM_FICHIER = "reglages.json"
+# Le thème choisi avec le bouton de la page (clair ou sombre) est rangé à part : ce n'est pas un filtre.
+NOM_FICHIER_INTERFACE = "interface.json"
+THEMES = ("light", "dark")
 
 # Dossiers du système : jamais utiles pour retrouver un document personnel.
 DOSSIERS_SYSTEME = [
@@ -264,3 +267,22 @@ def enregistrer(reglages: dict, dossier: Path | None = None) -> dict:
     provisoire.write_text(json.dumps(propre, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(provisoire, fichier)
     return propre
+
+
+def charger_theme(dossier: Path | None = None) -> str | None:
+    """Le thème choisi avec le bouton, ou None : la page suit alors le réglage du PC."""
+    dossier = dossier or dossier_donnees()
+    try:
+        theme = json.loads((dossier / NOM_FICHIER_INTERFACE).read_text(encoding="utf-8")).get("theme")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return theme if theme in THEMES else None
+
+
+def enregistrer_theme(theme: str, dossier: Path | None = None) -> None:
+    dossier = dossier or dossier_donnees()
+    dossier.mkdir(parents=True, exist_ok=True)
+    fichier = dossier / NOM_FICHIER_INTERFACE
+    provisoire = fichier.with_suffix(".json.tmp")
+    provisoire.write_text(json.dumps({"theme": theme}) + "\n", encoding="utf-8")
+    os.replace(provisoire, fichier)

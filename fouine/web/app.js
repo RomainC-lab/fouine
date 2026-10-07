@@ -3,25 +3,15 @@
 // jamais interprété comme du HTML.
 
 // -------------------------------------------------------------------- thème
-// Ce bloc s'exécute avant l'affichage de la page, pour éviter un éclair de la mauvaise couleur.
+// Le thème choisi avec le bouton est retenu par Fouine, pas par le navigateur : la page arrive
+// avec « data-theme » déjà posé sur <html>. Sans choix, elle suit le réglage du PC.
 
 const racine = document.documentElement;
 const prefereSombre = window.matchMedia("(prefers-color-scheme: dark)");
 
-function themeRetenu() {
-  try {
-    const choix = localStorage.getItem("fouine-theme");
-    return choix === "dark" || choix === "light" ? choix : null;
-  } catch (erreur) {
-    return null; // stockage refusé par le navigateur : on suit le système
-  }
-}
-
 function themeActuel() {
   return racine.dataset.theme || (prefereSombre.matches ? "dark" : "light");
 }
-
-if (themeRetenu()) racine.dataset.theme = themeRetenu();
 
 // ------------------------------------------------------------------- outils
 
@@ -116,8 +106,9 @@ function afficherTheme() {
 function changerTheme() {
   const nouveau = themeActuel() === "dark" ? "light" : "dark";
   racine.dataset.theme = nouveau;
-  try { localStorage.setItem("fouine-theme", nouveau); } catch (erreur) { /* le choix vaut pour cette page */ }
   afficherTheme();
+  // Si Fouine ne peut pas le retenir, le choix vaut au moins pour cette fois.
+  appeler("theme", { theme: nouveau }).catch(() => {});
 }
 
 // ------------------------------------------------------------------ onglets

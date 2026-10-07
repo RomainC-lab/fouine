@@ -1,4 +1,4 @@
-"""Le petit serveur qui affiche l'interface dans le navigateur.
+"""Le petit serveur local qui sert l'interface, à la fenêtre de Fouine ou au navigateur.
 
 Il n'écoute que sur 127.0.0.1 : seul ce PC peut lui parler. Trois protections
 en plus, contre une page web malveillante ouverte dans le même navigateur ou un
@@ -6,7 +6,11 @@ autre programme du PC :
 - l'en-tête Host doit être 127.0.0.1 ou localhost, avec le bon port ;
 - l'en-tête Origin, s'il est présent, doit être celui de Fouine ;
 - chaque action demande un jeton secret, tiré au hasard à chaque lancement et
-  transmis au navigateur dans l'adresse d'ouverture.
+  transmis à la fenêtre (ou au navigateur) dans l'adresse d'ouverture.
+
+Une seule demande ne passe pas par ce jeton : « premier plan », envoyée par un second
+lancement de Fouine pour ramener la fenêtre du premier devant. Elle a sa propre clé
+(voir `instance.py`) et ne fait rien d'autre.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ _STATIQUES = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/style.css": ("style.css", "text/css; charset=utf-8"),
 }
+_BALISE_HTML = b'<html lang="fr">'
 _CORPS_MAX = 1024 * 1024
 _SECURITE = (
     "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
@@ -95,6 +100,24 @@ class Application:
 
     def reglages(self) -> dict:
         return mod_reglages.charger(self.dossier)
+
+    def page(self, contenu: bytes) -> bytes:
+        """La page d'accueil, avec le thème retenu déjà posé : pas d'éclair de la mauvaise couleur,
+        et le choix tient d'un lancement à l'autre (le port change, la mémoire du navigateur aussi)."""
+        theme = mod_reglages.charger_theme(self.dossier)
+        if theme is None:
+            return contenu
+        return contenu.replace(_BALISE_HTML, _BALISE_HTML[:-1] + f' data-theme="{theme}">'.encode(), 1)
+
+    def theme(self, corps: dict) -> dict:
+        choix = corps.get("theme")
+        if choix not in mod_reglages.THEMES:
+            raise Refus(400, "Thème inconnu.")
+        try:
+            mod_reglages.enregistrer_theme(choix, self.dossier)
+        except OSError:
+            raise Refus(500, "Le thème n'a pas pu être retenu.") from None
+        return {"theme": choix}
 
     def etat(self, _=None) -> dict:
         return {
@@ -255,6 +278,7 @@ class Application:
 
     ACTIONS = {
         "enregistrer": enregistrer,
+        "theme": theme,
         "dossiers": dossiers,
         "apercu": apercu,
         "indexer": indexer,
@@ -324,7 +348,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
         try:
             if chemin == "/api/etat":
                 self._controler(api=True)
-                return self._json(200, self.server.application.etat())
+                self._json(200, self.server.application.etat())
+                self.server.page_vivante.set()  # la page est affichée et son script a le bon jeton
+                return None
             if chemin == "/api/vignette":
                 self._controler(api=True)
                 demande = parse_qs(self.path.partition("?")[2]).get("id", [""])
@@ -333,7 +359,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             if chemin not in _STATIQUES:
                 raise Refus(404, "Page introuvable.")
             nom, type_contenu = _STATIQUES[chemin]
-            self._repondre(200, (DOSSIER_WEB / nom).read_bytes(), type_contenu)
+            contenu = (DOSSIER_WEB / nom).read_bytes()
+            if chemin == "/":
+                contenu = self.server.application.page(contenu)
+            self._repondre(200, contenu, type_contenu)
         except Refus as refus:
             self._refuser(refus)
         except Exception as erreur:
@@ -344,8 +373,16 @@ class Gestionnaire(BaseHTTPRequestHandler):
     def do_POST(self):
         chemin = self.path.split("?", 1)[0]
         try:
-            self._controler(api=True)
-            action = Application.ACTIONS.get(chemin[len("/api/"):]) if chemin.startswith("/api/") else None
+            if chemin == "/api/premier-plan":
+                self._controler(api=False)
+                cle = self.headers.get("X-Fouine-Instance", "")
+                attendue = self.server.cle_instance
+                if not attendue or not hmac.compare_digest(cle.encode(), attendue.encode()):
+                    raise Refus(403, "Clé manquante.")
+                action = lambda application, corps: self.server.montrer()  # noqa: E731
+            else:
+                self._controler(api=True)
+                action = Application.ACTIONS.get(chemin[len("/api/"):]) if chemin.startswith("/api/") else None
             if action is None:
                 raise Refus(404, "Action inconnue.")
             if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
@@ -383,6 +420,18 @@ class Serveur(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", port), Gestionnaire)
         self.application = application
         self.jeton = secrets.token_urlsafe(32)
+        self.page_vivante = threading.Event()
+        # Posés au lancement (voir `__main__.py`) : la clé qu'un second lancement doit présenter
+        # pour demander « premier plan », et ce qu'il faut faire alors.
+        self.cle_instance: str | None = None
+        self.premier_plan = None
+        self.reveils = 0
+
+    def montrer(self) -> dict:
+        self.reveils += 1
+        if self.premier_plan is not None:
+            self.premier_plan()
+        return {"ok": True}
 
     @property
     def adresse(self) -> str:

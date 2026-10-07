@@ -124,7 +124,7 @@ class TestSecurite(Base):
     def test_jeton_obligatoire_pour_toute_action(self):
         actions = [
             "enregistrer", "dossiers", "apercu", "indexer", "arreter", "recherche", "recherche_images", "illisibles",
-            "ouvrir",
+            "ouvrir", "theme",
         ]
         self.assertEqual(sorted(actions), sorted(Application.ACTIONS))
         for action in actions:
