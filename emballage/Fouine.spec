@@ -5,6 +5,8 @@
 #
 # Les modèles ne sont pas dans le paquet : Fouine les télécharge au premier besoin.
 
+import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata
@@ -26,6 +28,20 @@ analyse = Analysis(
     excludes=["tkinter", "matplotlib", "IPython", "pytest", "torch", "tensorflow"],
     noarchive=False,
 )
+# Bibliothèques Microsoft (Visual C++) dont Python et ONNX Runtime ont besoin : elles ne sont
+# pas sur tous les PC. On les met à côté de Fouine.exe, pour qu'il ne dépende de rien d'autre.
+if sys.platform == "win32":
+    deja = {Path(binaire[0]).name.lower() for binaire in analyse.binaries}
+    endroits = [Path(sys.base_prefix), Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"]
+    for nom in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll",
+                "msvcp140_atomic_wait.dll", "msvcp140_codecvt_ids.dll", "concrt140.dll"):
+        if nom in deja:
+            continue
+        for endroit in endroits:
+            if (endroit / nom).is_file():
+                analyse.binaries.append((nom, str(endroit / nom), "BINARY"))
+                break
+
 pyz = PYZ(analyse.pure)
 exe = EXE(
     pyz,

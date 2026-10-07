@@ -83,8 +83,12 @@ jobs:
         run: |
           $fichiers = Get-ChildItem -Recurse -File dist\Fouine
           "{0} fichiers, {1:N0} Mo" -f $fichiers.Count, (($fichiers | Measure-Object Length -Sum).Sum / 1MB)
-          "Bibliothèques Microsoft embarquées :"
-          $fichiers | Where-Object Name -match "^(msvcp|vcruntime|vcomp|concrt|ucrtbase)" | ForEach-Object { "  " + $_.FullName.Substring((Resolve-Path dist).Path.Length + 1) }
+          "Bibliothèques Microsoft (Visual C++) embarquées :"
+          $vc = $fichiers | Where-Object { $_.Name -match "^(msvcp|vcruntime|concrt)" }
+          $vc | ForEach-Object { "  " + $_.FullName.Substring((Resolve-Path dist).Path.Length + 1) }
+          foreach ($nom in "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll") {
+            if (-not ($vc | Where-Object { $_.Name -ieq $nom })) { throw "$nom n'est pas dans le paquet : Fouine.exe ne démarrerait pas sur un PC qui ne l'a pas" }
+          }
           $modeles = $fichiers | Where-Object { $_.Length -gt 60MB }
           if ($modeles) { $modeles | ForEach-Object { $_.FullName }; throw "un très gros fichier est dans le paquet : un modèle embarqué par erreur ?" }
       - name: Zip et empreinte SHA-256
