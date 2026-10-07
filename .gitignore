@@ -13,3 +13,7 @@ donnees/
 # Divers
 .DS_Store
 Thumbs.db
+
+# Fabrication de Fouine.exe
+build/
+dist/
