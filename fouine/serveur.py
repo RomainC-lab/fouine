@@ -30,6 +30,7 @@ from urllib.parse import parse_qs
 from . import __version__, filtres, reglages as mod_reglages
 from .embedding import TAILLE_MODELE
 from .images import TAILLE_MODELE_IMAGES
+from .journal import journal
 
 
 def _dossier_web() -> Path:
@@ -426,6 +427,13 @@ class Serveur(ThreadingHTTPServer):
         self.cle_instance: str | None = None
         self.premier_plan = None
         self.reveils = 0
+
+    def handle_error(self, request, client_address):
+        """Une connexion coupée par la fenêtre ou le navigateur qui se ferme n'est pas une panne ;
+        le reste est noté en une ligne, sans les détails de la demande."""
+        erreur = sys.exc_info()[1]
+        if not isinstance(erreur, ConnectionError):
+            journal.warning("Demande interrompue (%s).", type(erreur).__name__)
 
     def montrer(self) -> dict:
         self.reveils += 1

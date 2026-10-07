@@ -244,6 +244,22 @@ class TestJournal(AvecDossier):
                         "ERROR Erreur inattendue", "ValueError: erreur perdue"):
             self.assertIn(attendu, contenu)
 
+    def test_connexion_coupee_par_la_fenetre_sans_bruit(self):
+        fichier = mod_journal.installer(self.donnees)
+        serveur = self.serveur()
+        with contextlib.redirect_stderr(io.StringIO()) as erreurs:
+            for erreur in (ConnectionResetError("coupée"), BrokenPipeError("coupée"), ValueError("autre chose")):
+                try:
+                    raise erreur
+                except Exception:
+                    serveur.handle_error(None, ("127.0.0.1", 1))
+        mod_journal.fermer()
+        self.assertEqual(erreurs.getvalue(), "")
+        contenu = fichier.read_text(encoding="utf-8")
+        self.assertEqual(contenu.count("Demande interrompue"), 1)
+        self.assertIn("Demande interrompue (ValueError).", contenu)
+        self.assertNotIn("Traceback", contenu)
+
     def test_dossier_impossible_fouine_marche_quand_meme(self):
         self.donnees.parent.mkdir(parents=True, exist_ok=True)
         self.donnees.write_text("un fichier à la place du dossier", encoding="utf-8")
