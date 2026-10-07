@@ -7,3 +7,5 @@ pillow>=10
 onnxruntime>=1.17
 tokenizers>=0.15
 huggingface_hub>=0.23
+# La fenêtre de Fouine. Sans elle (ou sans moteur d'affichage sur le PC), Fouine s'ouvre dans le navigateur.
+pywebview>=6,<7
