@@ -1,0 +1,15 @@
+# Environnement Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Données personnelles : index, modèle téléchargé, réglages
+index.sqlite*
+reglages.json
+modele/
+donnees/
+
+# Divers
+.DS_Store
+Thumbs.db

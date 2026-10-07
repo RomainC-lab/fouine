@@ -1,0 +1,12 @@
+* text=auto
+# Les .bat sont gardés tels quels, avec leurs fins de ligne Windows (CRLF),
+# pour que le ZIP téléchargé depuis GitHub les contienne aussi.
+*.bat -text
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.png binary

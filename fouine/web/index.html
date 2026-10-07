@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fouine</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="entete">
+  <div class="largeur entete-ligne">
+    <div>
+      <h1>Fouine</h1>
+      <p class="devise">Retrouvez vos fichiers en décrivant ce qu'ils contiennent. Tout reste sur ce PC.</p>
+    </div>
+    <nav class="onglets" aria-label="Parties de Fouine">
+      <button type="button" class="onglet" data-onglet="chercher" aria-current="page">Chercher</button>
+      <button type="button" class="onglet" data-onglet="regler">Dossiers et filtres</button>
+    </nav>
+  </div>
+</header>
+
+<main class="largeur">
+  <p id="alerte" class="alerte" role="alert" hidden></p>
+
+  <section id="chercher">
+    <form id="form-recherche" class="recherche">
+      <label for="question" class="invisible">Votre recherche</label>
+      <input id="question" type="search" autocomplete="off" placeholder="Par exemple : facture du plombier, recette de la tarte aux pommes…">
+      <button type="submit" class="principal">Chercher</button>
+    </form>
+    <p id="etat-index" class="discret"></p>
+    <div id="resultats" aria-live="polite"></div>
+  </section>
+
+  <section id="regler" hidden>
+    <div class="bloc">
+      <h2>1. Les dossiers à lire</h2>
+      <p class="discret">Fouine ne lit que les dossiers de cette liste, et rien d'autre sur le PC.</p>
+      <ul id="liste-dossiers" class="liste-dossiers"></ul>
+      <div id="propositions" class="propositions"></div>
+      <button type="button" id="ajouter-dossier">Ajouter un dossier…</button>
+    </div>
+
+    <div class="bloc">
+      <h2>2. Ce qui est laissé de côté</h2>
+      <div class="champ">
+        <label for="extensions">Types de fichiers lus</label>
+        <input id="extensions" type="text" spellcheck="false">
+        <p class="aide">Séparés par des espaces. Tout autre type (photos, vidéos, musique, archives, programmes…) n'est jamais ouvert.</p>
+      </div>
+      <div class="champ court">
+        <label for="taille">Taille maximale d'un fichier, en Mo</label>
+        <input id="taille" type="number" min="1" max="2000" step="1">
+      </div>
+      <div class="champ">
+        <label for="exclus">Noms de dossiers jamais ouverts</label>
+        <textarea id="exclus" rows="5" spellcheck="false"></textarea>
+        <p class="aide">Un nom par ligne : dossiers de Windows, des programmes, dossiers techniques.</p>
+      </div>
+      <div class="champ case">
+        <input id="caches" type="checkbox">
+        <label for="caches">Lire aussi les fichiers et dossiers cachés</label>
+      </div>
+      <details>
+        <summary>Fichiers sensibles : jamais lus</summary>
+        <p class="aide">Mots de passe, clés, portefeuilles, profils de navigateur. Un fichier ou un dossier dont le nom correspond à l'un de ces motifs n'est jamais ouvert (« * » remplace n'importe quoi).</p>
+        <p id="sensibles" class="motifs"></p>
+        <p class="aide">Cette liste se change seulement dans le fichier de réglages : <span id="fichier-reglages" class="chemin"></span></p>
+      </details>
+      <p class="actions">
+        <button type="button" id="defaut">Remettre les filtres d'origine</button>
+        <span id="enregistre" class="discret" aria-live="polite"></span>
+      </p>
+    </div>
+
+    <div class="bloc">
+      <h2>3. Vérifier, puis indexer</h2>
+      <p class="discret">L'aperçu compte les fichiers sans les ouvrir. L'indexation les lit ; la première fois elle peut être longue, les suivantes ne relisent que ce qui a changé.</p>
+      <p class="actions">
+        <button type="button" id="voir-apercu">Voir ce qui serait lu</button>
+        <button type="button" id="indexer" class="principal">Indexer maintenant</button>
+        <button type="button" id="arreter" hidden>Arrêter</button>
+      </p>
+      <div id="progression" hidden>
+        <progress id="barre" max="100" value="0"></progress>
+        <p id="texte-progression" class="discret"></p>
+      </div>
+      <p id="bilan" class="bilan" hidden></p>
+      <div id="illisibles"></div>
+      <div id="apercu"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="choix-dossier">
+  <h2>Choisir un dossier</h2>
+  <p id="dossier-courant" class="chemin"></p>
+  <ul id="sous-dossiers" class="sous-dossiers"></ul>
+  <p class="actions">
+    <button type="button" id="choisir" class="principal">Choisir ce dossier</button>
+    <button type="button" id="annuler">Annuler</button>
+  </p>
+</dialog>
+
+<footer class="largeur pied">
+  <p>Fouine <span id="version"></span> · Cette page vient de votre PC (127.0.0.1) ; elle ne charge rien depuis Internet.</p>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
